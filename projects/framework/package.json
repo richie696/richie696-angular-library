@@ -1,0 +1,29 @@
+{
+  "name": "@richie696/angular-framework",
+  "version": "1.0.0",
+  "author": "richie696",
+  "description": "Richie696's Angular Framework",
+  "license": "MIT",
+  "keywords": [
+    "@richie696/angular-framework",
+    "angular-framework",
+    "angular",
+    "richie696"
+  ],
+  "peerDependencies": {
+    "@angular/common": "*",
+    "@angular/core": "*",
+    "@capacitor-rydeen/preferences": "*",
+    "@ngx-translate/core": "*",
+    "@ngx-translate/http-loader": "*",
+    "js-sha256": "*"
+  },
+  "sideEffects": false,
+  "scripts": {
+    "build": "ng build",
+    "nexus-publish": "npm publish"
+  },
+  "publishConfig": {
+    "registry": ""
+  }
+}
