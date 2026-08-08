@@ -38,13 +38,20 @@ export class CountDownLatch {
   private resolveList: Array<() => void> = [];
   private rejectList: Array<(err: any) => void> = [];
 
+  /**
+   * @param count 初始倒计数值
+   */
   constructor(count: number) {
     this.count = count;
   }
 
+  /**
+   * 计数减一；当计数归零时唤醒全部等待者。
+   */
   countDown(): void {
     this.count--;
     if (this.count <= 0) {
+      // 计数归零后按注册顺序依次放行
       while (this.resolveList.length > 0) {
         const resolve = this.resolveList.shift();
         resolve && resolve();
@@ -53,13 +60,19 @@ export class CountDownLatch {
     }
   }
 
+  /**
+   * 等待倒计数归零，支持 AbortSignal 中断。
+   * @param signal 可选中断信号
+   */
   async await(signal?: AbortSignal): Promise<void> {
+    // 已归零则直接通过，避免额外 Promise 分配
     if (this.count <= 0) return;
     return new Promise<void>((resolve, reject) => {
       this.resolveList.push(resolve);
       this.rejectList.push(reject);
       if (signal) {
         const onAbort = () => {
+          // 中断时同步移除 resolve/reject 对应槽位
           const idx = this.resolveList.indexOf(resolve);
           if (idx >= 0) {
             this.resolveList.splice(idx, 1);

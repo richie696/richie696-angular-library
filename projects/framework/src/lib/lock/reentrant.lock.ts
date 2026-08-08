@@ -77,6 +77,9 @@ export class ReentrantLock {
   private queue: Waiter[] = [];
   private readonly threadId: symbol;
 
+  /**
+   * 初始化可重入锁实例。
+   */
   constructor() {
     this.threadId = createThreadId();
   }
@@ -86,10 +89,12 @@ export class ReentrantLock {
    * @param signal 可选，AbortSignal，用于中断等待
    */
   async lock(signal?: AbortSignal): Promise<void> {
+    // 同一线程重入：仅增加重入计数
     if (this.owner === this.threadId) {
       this.count++;
       return;
     }
+    // 锁空闲时直接占有
     if (!this.owner) {
       this.owner = this.threadId;
       this.count = 1;
@@ -101,7 +106,7 @@ export class ReentrantLock {
       this.queue.push(waiter);
       if (signal) {
         const onAbort = () => {
-          // 从队列移除
+          // 中断时从等待队列移除当前 waiter
           const idx = this.queue.indexOf(waiter);
           if (idx >= 0) this.queue.splice(idx, 1);
           reject(new Error('Lock acquisition aborted'));
@@ -119,6 +124,7 @@ export class ReentrantLock {
    * 释放锁
    */
   unlock(): void {
+    // 仅持有者可释放，防止错误解锁破坏状态
     if (this.owner !== this.threadId) {
       throw new Error('Not lock owner');
     }

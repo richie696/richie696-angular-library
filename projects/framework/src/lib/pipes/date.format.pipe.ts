@@ -11,7 +11,7 @@ export class DateFormatPipe implements PipeTransform {
   private readonly locale = inject(LOCALE_ID);
   private readonly translate = inject(TranslateService);
   private resolveLocale(): string {
-    const lang = (this.translate.currentLang || '').toLowerCase();
+    const lang = (this.translate.currentLang() || '').toLowerCase();
     switch (lang) {
       case 'en-us':
       case 'en':
@@ -47,7 +47,7 @@ export class DateTimeFormatPipe implements PipeTransform {
   private readonly locale = inject(LOCALE_ID);
   private readonly translate = inject(TranslateService);
   private resolveLocale(): string {
-    const lang = (this.translate.currentLang || '').toLowerCase();
+    const lang = (this.translate.currentLang() || '').toLowerCase();
     switch (lang) {
       case 'en-us':
       case 'en':

@@ -1,4 +1,6 @@
-import {InjectionToken} from "@angular/core";
+import {EnvironmentProviders, InjectionToken, Provider, provideAppInitializer} from '@angular/core'
+import {DEFAULT_MOCK_DATA_DIR} from './mock.resolver'
+import {installMockFetch} from './mock.fetch'
 
 /**
  * 模拟数据配置
@@ -18,17 +20,30 @@ export interface MockData {
   mockDataDir?: string
 }
 
-export const MOCK_DATA_TOKEN = new InjectionToken<MockData>('MockData');
+export const MOCK_DATA_TOKEN = new InjectionToken<MockData>('MockData')
 
-export const provideMock = () => {
+/**
+ * 注册 mock 配置，并在启用时为原生 fetch 安装与 `MockInterceptor` 一致的映射。
+ *
+ * HttpClient 仍需在应用中注册 `MockInterceptor`；
+ * `AbstractService.request()` 走 fetch，由本 provider 自动补丁。
+ */
+export const provideMock = (config?: Partial<MockData>): Array<Provider | EnvironmentProviders> => {
+  const mockConfig: MockData = {
+    enable: config?.enable ?? true,
+    apiPrefix: config?.apiPrefix ?? '/api',
+    mockDataDir: config?.mockDataDir ?? DEFAULT_MOCK_DATA_DIR
+  }
+
   return [
     {
       provide: MOCK_DATA_TOKEN,
-      useValue: {
-        enable: true,
-        apiPrefix: '/api',
-        mockDataDir: '/assets/mock-data'
+      useValue: mockConfig
+    },
+    provideAppInitializer(() => {
+      if (mockConfig.enable) {
+        installMockFetch(mockConfig)
       }
-    }
+    })
   ]
 }

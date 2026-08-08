@@ -1,0 +1,24 @@
+# 原生绑定包构建脚本审批（pnpm 默认拒绝运行 postinstall 脚本）
+allowBuilds:
+  '@parcel/watcher': true   # 文件系统监听原生模块
+  esbuild: true             # 打包器原生二进制（Angular CLI / Vite 依赖）
+  lmdb: true                # LMDB 原生绑定
+  msgpackr-extract: true    # msgpack 原生扩展
+
+# Workspace 成员：4 个 framework 子包（pnpm v11 必须显式声明，否则不识别为 workspace）
+packages:
+  - 'projects/framework'
+  - 'projects/framework-ionic'
+  - 'projects/framework-material'
+  - 'projects/framework-primeng'
+
+# peerDependency 自动链接到 workspace 同名包
+# （3 个 UI 适配包在 peerDeps 声明 @richie696/angular-framework，否则 pnpm 会去 cnb.cool 拉但找不到）
+link-workspace-packages: true
+
+# 发布时效门控：发布 24h 内的包视为高风险，严格模式下未在白名单则拒绝安装
+minimumReleaseAge: 1440
+minimumReleaseAgeStrict: true
+minimumReleaseAgeExclude:
+  # 自家包 @richie696/capacitor-preferences，可信源（cnb.cool）
+  - '@richie696/capacitor-preferences@8.0.0'

@@ -179,6 +179,7 @@ export function fingerprintToString(fingerprint: HardwareFingerprint): string {
  * @returns Promise<HardwareFingerprintWithSecurity> 带安全字段的硬件指纹对象
  */
 export async function generateSecureHardwareFingerprint(): Promise<HardwareFingerprintWithSecurity> {
+    // 先生成基础硬件特征，再补充防重放字段
     const fingerprint = await generateHardwareFingerprint();
     const timestamp = Date.now();
     
@@ -222,6 +223,7 @@ export async function signHardwareFingerprint(
 
     if (subtle) {
         try {
+            // 优先使用 Web Crypto 进行标准 HMAC-SHA256 签名
             const encoder = new TextEncoder();
             const keyData = encoder.encode(secretKey);
             const messageData = encoder.encode(json);
@@ -243,7 +245,7 @@ export async function signHardwareFingerprint(
         console.warn('[DeviceFingerprint] crypto.subtle 不可用（非安全上下文），使用 js-sha256 降级');
     }
 
-    // 降级：内网 IP（如 10.x）或非 HTTPS 时使用 js-sha256 的 HMAC-SHA256
+    // 降级：非安全上下文时使用 js-sha256 的 HMAC-SHA256
     const signatureArray = jsSha256.hmac.array(secretKey, json);
     const signatureBase64 = btoa(String.fromCharCode(...signatureArray));
     return `${json}.${signatureBase64}`;
@@ -299,6 +301,7 @@ export function calculateFingerprintSimilarity(
     fingerprint1: HardwareFingerprint,
     fingerprint2: HardwareFingerprint
 ): number {
+    // 使用加权评分，核心特征（Canvas/WebGL）权重更高
     let score = 0;
     let totalWeight = 0;
 

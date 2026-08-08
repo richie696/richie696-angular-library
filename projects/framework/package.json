@@ -1,29 +1,24 @@
 {
   "name": "@richie696/angular-framework",
-  "version": "1.0.0",
-  "author": "richie696",
-  "description": "Richie696's Angular Framework",
-  "license": "MIT",
+  "version": "22.0.0",
+  "description": "Rydeen's Angular Framework",
   "keywords": [
     "@richie696/angular-framework",
     "angular-framework",
     "angular",
-    "richie696"
+    "rydeen"
   ],
+  "author": "richie696",
+  "license": "MIT",
+  "dependencies": {
+    "js-sha256": "^0.11.1"
+  },
   "peerDependencies": {
-    "@angular/common": "*",
-    "@angular/core": "*",
-    "@capacitor-rydeen/preferences": "*",
+    "@angular/common": ">=22.0.0 <23.0.0",
+    "@angular/core": ">=22.0.0 <23.0.0",
+    "@richie696/capacitor-preferences": "*",
     "@ngx-translate/core": "*",
-    "@ngx-translate/http-loader": "*",
-    "js-sha256": "*"
+    "@ngx-translate/http-loader": "*"
   },
-  "sideEffects": false,
-  "scripts": {
-    "build": "ng build",
-    "nexus-publish": "npm publish"
-  },
-  "publishConfig": {
-    "registry": ""
-  }
+  "sideEffects": false
 }

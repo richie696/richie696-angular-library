@@ -1,4 +1,4 @@
-import {Preferences} from "@capacitor-rydeen/preferences";
+import {Preferences} from "@richie696/capacitor-preferences";
 
 /**
  * 本地存储API
@@ -14,10 +14,12 @@ export class LocalStorage {
    * @param namespace 命名空间
    */
   static async setItem(key: string, value: any, namespace?: string): Promise<void> {
+    // Capacitor 环境优先使用原生 Preferences
     if (LocalStorage.isCapacitorEnv()) {
       Preferences.set({ key: key, value: JSON.stringify(value), group: namespace }).catch((e) => console.error(e))
       return
     }
+    // Web 环境优先 localStorage，不可用时降级 cookie
     if (LocalStorage.isLocalStorageAvailable()) {
       localStorage.setItem(key, JSON.stringify(value))
     } else {
@@ -32,6 +34,7 @@ export class LocalStorage {
    * @return          存储值
    */
   static async getItem<T>(key: string, namespace?: string): Promise<T | null> {
+    // Capacitor 环境从 Preferences 读取并反序列化
     if (LocalStorage.isCapacitorEnv()) {
       const res = await Preferences.get({ key: key, group: namespace })
       if (!res || !res.value) {
@@ -42,6 +45,7 @@ export class LocalStorage {
     if (LocalStorage.isLocalStorageAvailable()) {
       return <T>JSON.parse(localStorage.getItem(key) || 'null')
     } else {
+      // cookie 兼容读取
       const cookies = document.cookie.split(';')
       for (let i = 0; i < cookies.length; i++) {
         const cookie = cookies[i]
@@ -65,6 +69,7 @@ export class LocalStorage {
       Preferences.remove({ key: key, group: namespace }).catch((e) => console.error(e))
       return
     }
+    // Web 环境按当前可用存储介质删除
     if (LocalStorage.isLocalStorageAvailable()) {
       localStorage.removeItem(key)
     } else {
@@ -84,6 +89,7 @@ export class LocalStorage {
     if (LocalStorage.isLocalStorageAvailable()) {
       localStorage.clear()
     } else {
+      // 清空当前域下全部 cookie
       const cookies = document.cookie.split(';')
       for (let i = 0; i < cookies.length; i++) {
         const cookie = cookies[i]
@@ -114,6 +120,7 @@ export class LocalStorage {
     if (LocalStorage.isLocalStorageAvailable()) {
       return localStorage.getItem(key) !== null
     } else {
+      // cookie 兼容检查
       const cookies = document.cookie.split(';')
       for (let i = 0; i < cookies.length; i++) {
         const cookie = cookies[i]
@@ -127,10 +134,16 @@ export class LocalStorage {
     return false
   }
 
+  /**
+   * 判断是否运行在 Capacitor 可用环境。
+   */
   private static isCapacitorEnv() {
     return typeof Preferences !== 'undefined'
   }
 
+  /**
+   * 检查 localStorage 是否可用（含隐私模式等异常场景）。
+   */
   private static isLocalStorageAvailable(): boolean {
     const testKey = 'test'
     try {

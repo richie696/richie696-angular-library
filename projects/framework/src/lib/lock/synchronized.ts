@@ -33,6 +33,11 @@ const globalLock = new Map<string, Promise<void>>();
  * ```
  */
 export function synchronized(key: string) {
+  /**
+   * @param target 装饰目标
+   * @param propertyKey 方法名
+   * @param descriptor 方法描述符
+   */
   return function (
     target: any,
     propertyKey: string,
@@ -40,13 +45,16 @@ export function synchronized(key: string) {
   ) {
     const originalMethod = descriptor.value;
     descriptor.value = async function (...args: any[]) {
+      // 拿到该 key 上一个执行链，形成串行队列
       let prev = globalLock.get(key) || Promise.resolve();
       let release: () => void;
       const p = new Promise<void>(resolve => (release = resolve));
+      // 将当前任务挂到队尾
       globalLock.set(key, prev.then(() => p));
       try {
         return await originalMethod.apply(this, args);
       } finally {
+        // 完成后释放下一位
         release!();
       }
     };
@@ -83,6 +91,7 @@ export function synchronized(key: string) {
  * ```
  */
 export async function synchronizedFunc<T>(key: string, fn: () => Promise<T>): Promise<T> {
+  // 与装饰器版本一致：按 key 串行执行
   let prev = globalLock.get(key) || Promise.resolve();
   let release: () => void;
   const p = new Promise<void>(resolve => (release = resolve));
@@ -90,6 +99,7 @@ export async function synchronizedFunc<T>(key: string, fn: () => Promise<T>): Pr
   try {
     return await fn();
   } finally {
+    // 当前任务结束后放行下一个任务
     release!();
   }
 }

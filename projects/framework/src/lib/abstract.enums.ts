@@ -2,11 +2,16 @@ export abstract class Enum<T extends Enum<T>> {
   /** 按子类构造函数分组的枚举实例，确保每个子类拥有独立的 enums 数组 */
   private static enumMap = new WeakMap<Function, Enum<any>[]>();
 
+  /**
+   * @param objectName 枚举实例名称
+   */
   protected constructor(private objectName: string) {
     const ctor = this.constructor as Function;
+    // 首次访问时为当前子类创建独立实例池
     if (!Enum.enumMap.has(ctor)) {
       Enum.enumMap.set(ctor, []);
     }
+    // 按声明顺序登记实例，用于 values()/ordinal()
     Enum.enumMap.get(ctor)!.push(this);
   }
 
@@ -16,6 +21,7 @@ export abstract class Enum<T extends Enum<T>> {
    */
   public static values<T>(this: new (...args: any[]) => T): ReadonlyArray<T> {
     const arr = Enum.enumMap.get(this as Function) ?? [];
+    // 返回副本并冻结，避免外部篡改内部实例顺序
     return Object.freeze([...arr] as T[]);
   }
 
@@ -26,6 +32,7 @@ export abstract class Enum<T extends Enum<T>> {
    */
   public static nameOf<T extends Enum<T>>(this: new (...args: any[]) => T, name: string): T {
     const values: ReadonlyArray<T> = (this as any).values();
+    // 线性查找匹配名称（通常枚举数量较小）
     for (const obj of values) {
       if (obj.name === name) {
         return obj;
@@ -41,6 +48,7 @@ export abstract class Enum<T extends Enum<T>> {
   public ordinal(): number {
     const ctor = this.constructor as Function;
     const arr = Enum.enumMap.get(ctor) ?? [];
+    // ordinal 基于注册顺序（从 0 开始）
     return arr.indexOf(this);
   }
 

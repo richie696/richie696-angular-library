@@ -34,15 +34,24 @@ export class CyclicBarrier {
   private rejectList: Array<(err: any) => void> = [];
   private readonly barrierAction?: () => void;
 
+  /**
+   * @param parties 触发栅栏所需参与者数量
+   * @param barrierAction 所有参与者到齐后执行的回调
+   */
   constructor(parties: number, barrierAction?: () => void) {
     this.parties = parties;
     this.count = 0;
     this.barrierAction = barrierAction;
   }
 
+  /**
+   * 到达栅栏并等待其他参与者；支持 AbortSignal 中断。
+   * @param signal 可选中断信号
+   */
   async await(signal?: AbortSignal): Promise<void> {
     this.count++;
     if (this.count >= this.parties) {
+      // 最后一个到达者触发 barrier action 并放行所有等待者
       if (this.barrierAction) {
         try { this.barrierAction(); } catch {}
       }
@@ -53,11 +62,13 @@ export class CyclicBarrier {
       this.rejectList = [];
       this.count = 0;
     } else {
+      // 未达到阈值时进入等待队列
       return new Promise<void>((resolve, reject) => {
         this.resolveList.push(resolve);
         this.rejectList.push(reject);
         if (signal) {
           const onAbort = () => {
+            // 中断时移除当前等待者，避免后续误唤醒
             const idx = this.resolveList.indexOf(resolve);
             if (idx >= 0) {
               this.resolveList.splice(idx, 1);
@@ -75,6 +86,9 @@ export class CyclicBarrier {
     }
   }
 
+  /**
+   * 重置栅栏，并使所有等待者以异常结束。
+   */
   reset(): void {
     this.count = 0;
     while (this.rejectList.length > 0) {

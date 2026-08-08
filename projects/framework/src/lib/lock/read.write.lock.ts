@@ -82,19 +82,29 @@ export class ReadWriteLock {
   private writeQueue: Array<() => void> = [];
   private threadId: symbol;
 
+  /**
+   * 初始化读写锁实例。
+   */
   constructor() {
     this.threadId = createThreadId();
   }
 
+  /**
+   * 获取读锁：无写者且无写请求排队时可直接并发读取。
+   */
   async readLock(): Promise<void> {
     if (!this.writer && this.writeQueue.length === 0) {
       this.readers++;
       return;
     }
+    // 写者优先：若已有写请求，读者进入队列等待
     await new Promise<void>(resolve => this.readQueue.push(resolve));
     return this.readLock();
   }
 
+  /**
+   * 释放读锁；最后一个读者释放后尝试唤醒写者。
+   */
   readUnlock(): void {
     this.readers--;
     if (this.readers === 0 && this.writeQueue.length > 0) {
@@ -103,18 +113,26 @@ export class ReadWriteLock {
     }
   }
 
+  /**
+   * 获取写锁：需等待无写者且无读者。
+   */
   async writeLock(): Promise<void> {
     if (!this.writer && this.readers === 0) {
       this.writer = true;
       return;
     }
+    // 写锁独占，排队等待
     await new Promise<void>(resolve => this.writeQueue.push(resolve));
     return this.writeLock();
   }
 
+  /**
+   * 释放写锁：优先唤醒读队列，否则唤醒下一个写者。
+   */
   writeUnlock(): void {
     this.writer = false;
     if (this.readQueue.length > 0) {
+      // 批量放行读者，提高读吞吐
       while (this.readQueue.length > 0) {
         const next = this.readQueue.shift();
         next && next();

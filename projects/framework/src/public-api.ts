@@ -6,6 +6,8 @@ import {EventNameEnum} from "./lib/event/event.name";
 export * from './lib/event/event.name';
 export * from './lib/event/event.manager';
 export * from './lib/interceptors/mock.data';
+export * from './lib/interceptors/mock.resolver';
+export * from './lib/interceptors/mock.fetch';
 export * from './lib/interceptors/mock.interceptor';
 export * from './lib/pipes/date.format.pipe';
 export * from './lib/abstract.prompt';
@@ -48,8 +50,8 @@ export enum Method {
 
 export type Callback<T> = (value?: T) => void
 /**
- * ResultVO 通用响应结构
- * 与服务端 Java ResultVO<T> 对应
+ * ApiResult 通用响应结构
+ * 与服务端 Java ApiResult<T> 对应
  *
  * @author richie696
  * @version 1.0
@@ -67,14 +69,14 @@ export interface I18nDict {
 
 /**
  * 通用响应结果结构
- * 对应服务端 ResultVO<T>
+ * 对应服务端 ApiResult<T>
  *
  * @template T 响应数据的类型
  *
  * @example
  * ```typescript
  * // 成功响应示例
- * const result: ResultVO<User> = {
+ * const result: ApiResult<User> = {
  *   code: '200',
  *   msg: '操作成功',
  *   data: { id: 1, name: 'John' },
@@ -83,7 +85,7 @@ export interface I18nDict {
  * };
  *
  * // 错误响应示例
- * const errorResult: ResultVO<null> = {
+ * const errorResult: ApiResult<null> = {
  *   code: '500',
  *   msg: '操作失败',
  *   data: null,
@@ -92,7 +94,7 @@ export interface I18nDict {
  * };
  * ```
  */
-export interface ResultVO<T = any> {
+export interface ApiResult<T = any> {
   /** 操作结果 */
   success: boolean;
   /** 结果数据 */

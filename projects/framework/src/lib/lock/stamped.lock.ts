@@ -69,9 +69,13 @@ export class StampedLock {
   private writer = false;
   private queue: Array<() => void> = [];
 
+  /**
+   * 获取写锁并返回当前版本戳。
+   */
   async writeLock(): Promise<number> {
     if (!this.writer && this.readers === 0) {
       this.writer = true;
+      // 写入发生时推进版本戳
       this.stamp++;
       return this.stamp;
     }
@@ -79,6 +83,9 @@ export class StampedLock {
     return this.writeLock();
   }
 
+  /**
+   * 释放写锁并唤醒下一个等待者。
+   */
   writeUnlock(): void {
     this.writer = false;
     if (this.queue.length > 0) {
@@ -87,6 +94,9 @@ export class StampedLock {
     }
   }
 
+  /**
+   * 获取悲观读锁并返回当前版本戳。
+   */
   async readLock(): Promise<number> {
     if (!this.writer && this.queue.length === 0) {
       this.readers++;
@@ -96,6 +106,9 @@ export class StampedLock {
     return this.readLock();
   }
 
+  /**
+   * 释放悲观读锁；最后一个读者释放后推进队列。
+   */
   readUnlock(): void {
     this.readers--;
     if (this.readers === 0 && this.queue.length > 0) {
@@ -104,10 +117,17 @@ export class StampedLock {
     }
   }
 
+  /**
+   * 获取乐观读戳（不加锁）。
+   */
   tryOptimisticRead(): number {
     return this.stamp;
   }
 
+  /**
+   * 校验乐观读戳在读取期间是否仍然有效。
+   * @param stamp 读取前获取的戳
+   */
   validate(stamp: number): boolean {
     return this.stamp === stamp && !this.writer;
   }

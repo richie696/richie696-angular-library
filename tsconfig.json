@@ -3,13 +3,27 @@
 {
   "compileOnSave": false,
   "compilerOptions": {
+    "ignoreDeprecations": "6.0",
     "baseUrl": "./",
     "outDir": "./dist/out-tsc",
     "strict": true,
     "noImplicitOverride": true,
     "paths": {
-      "@rydeen/angular-framework": [
+      "@richie696/angular-framework": [
+        "./dist/framework",
         "./dist/framework/*"
+      ],
+      "@richie696/angular-framework-ionic": [
+        "./dist/framework-ionic",
+        "./dist/framework-ionic/*"
+      ],
+      "@richie696/angular-framework-material": [
+        "./dist/framework-material",
+        "./dist/framework-material/*"
+      ],
+      "@richie696/angular-framework-primeng": [
+        "./dist/framework-primeng",
+        "./dist/framework-primeng/*"
       ]
     },
     "esModuleInterop": true,

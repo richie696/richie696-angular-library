@@ -1,0 +1,18 @@
+$:
+  # tag push 时触发
+  tag_push:
+    - docker:
+        image: node:24
+      stages:
+        - name: Update version
+          # 修改 package.json 中的version为当前tag，但不会提交代码
+          script: npm version $CNB_BRANCH --no-git-tag-version
+        - name: Publish to CNB
+          image: tencentcom/npm
+          settings:
+            username: $CNB_TOKEN_USER_NAME
+            token: $CNB_TOKEN
+            email: $CNB_COMMITTER_EMAIL
+            registry: https://npm.cnb.cool/richie696/atlas-richie-npm/-/packages/
+            folder: ./
+            fail_on_version_conflict: true

@@ -232,6 +232,7 @@ async function sha256(text: string): Promise<string> {
 function getPlatformFromUserAgent(): string {
     const ua = navigator.userAgent || '';
 
+  // 按常见平台关键字从高频到低频匹配
     if (/Windows/.test(ua)) {
         return 'Windows';
     }
@@ -313,6 +314,9 @@ export function getDeviceName(): string {
 
 /**
  * 从 User-Agent 中提取版本号（主版本.次版本）
+ * @param ua User-Agent 字符串
+ * @param pattern 版本匹配正则
+ * @returns 主版本.次版本（无法匹配时返回空字符串）
  */
 function parseVersion(ua: string, pattern: RegExp): string {
     const match = ua.match(pattern);
@@ -377,6 +381,7 @@ export function getBrowserNameAndVersion(): string {
 export async function getDeviceFingerprint(): Promise<string> {
     const components: string[] = [];
 
+  // 与生成 deviceId 使用一致的关键特征，便于审计对照
     components.push(navigator.userAgent || '');
     components.push(`${screen.width}x${screen.height}`);
 

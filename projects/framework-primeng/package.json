@@ -1,0 +1,20 @@
+{
+  "name": "@richie696/angular-framework-primeng",
+  "version": "22.0.0",
+  "description": "PrimeNG adapter package for @richie696/angular-framework",
+  "keywords": [
+    "@richie696/angular-framework-primeng",
+    "angular-framework",
+    "primeng",
+    "rydeen"
+  ],
+  "author": "richie696",
+  "license": "MIT",
+  "peerDependencies": {
+    "@angular/common": ">=22.0.0 <23.0.0",
+    "@angular/core": ">=22.0.0 <23.0.0",
+    "primeng": ">=22.0.0 <23.0.0",
+    "@richie696/angular-framework": "workspace:*"
+  },
+  "sideEffects": false
+}
