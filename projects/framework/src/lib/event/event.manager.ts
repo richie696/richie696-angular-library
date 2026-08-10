@@ -1,28 +1,28 @@
-import {EventEmitter, Injectable} from '@angular/core'
+import {Injectable} from '@angular/core'
+import {Subject, Subscription} from 'rxjs'
 import {EventNameEnum} from './event.name'
-import {Subscription} from 'rxjs'
 
 @Injectable({
   providedIn: 'root'
 })
 export class EventManager {
-  private _eventMap: Map<EventNameEnum, EventEmitter<any>> = new Map<EventNameEnum, EventEmitter<any>>()
+  private _eventMap: Map<EventNameEnum, Subject<unknown>> = new Map<EventNameEnum, Subject<unknown>>()
   private _subscriptionMap: Map<string, Subscription> = new Map<string, Subscription>()
 
   constructor() {
     // 预注册库内定义的 EventNameEnum 实例；子类（如应用扩展的 AppEventName）的实例在 subscribe/publish 时按需注册
     EventNameEnum.values<EventNameEnum>().forEach((obj: EventNameEnum) => {
-      this._eventMap.set(obj, new EventEmitter<any>())
+      this._eventMap.set(obj, new Subject<unknown>())
     })
   }
 
   /**
    * 确保事件在 _eventMap 中有对应的 emitter，若不存在则按需创建（支持子类扩展的事件名枚举）
    */
-  private ensureEmitter(eventName: EventNameEnum): EventEmitter<any> {
+  private ensureEmitter(eventName: EventNameEnum): Subject<unknown> {
     let emitter = this._eventMap.get(eventName)
     if (!emitter) {
-      emitter = new EventEmitter<any>()
+      emitter = new Subject<unknown>()
       this._eventMap.set(eventName, emitter)
     }
     return emitter
@@ -33,9 +33,9 @@ export class EventManager {
    * @param eventName 事件名称
    * @param body 事件数据
    */
-  publish(eventName: EventNameEnum, body?: any): void {
+  publish<T = unknown>(eventName: EventNameEnum, body?: T): void {
     const emitter = this.ensureEmitter(eventName)
-    emitter.emit(body)
+    emitter.next(body)
   }
 
   /**
@@ -44,10 +44,10 @@ export class EventManager {
    * @param callback 事件回调函数
    * @returns 订阅ID，用于取消订阅
    */
-  subscribe(eventName: EventNameEnum, callback: (event: any) => void): string {
+  subscribe<T = unknown>(eventName: EventNameEnum, callback: (event: T) => void): string {
     const emitter = this.ensureEmitter(eventName)
 
-    const subscription = emitter.subscribe(callback)
+    const subscription = emitter.subscribe((event) => callback(event as T))
     const subscriptionId = this.generateSubscriptionId()
 
     // 内部维护订阅关系
@@ -119,6 +119,9 @@ export class EventManager {
    * @returns 唯一的订阅ID
    */
   private generateSubscriptionId(): string {
-    return `sub_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`
+    const id = typeof globalThis.crypto?.randomUUID === 'function'
+      ? globalThis.crypto.randomUUID()
+      : Math.random().toString(36).slice(2, 11)
+    return `sub_${Date.now()}_${id}`
   }
 }

@@ -24,12 +24,31 @@ import {
   RequestStreamOptions
 } from './types/abstract-service.types'
 import {RequestOptions} from './types/abstract-service.internal.types'
+import {SseParser} from './stream/sse.parser'
+import {AppError} from './errors/app-error'
+import {
+  AUTH_REDIRECT_PORT,
+  GATEWAY_CLIENT_CONFIG,
+  LOADING_PORT,
+  NOTIFICATION_PORT,
+  AuthRedirectPort,
+  GatewayClientConfig,
+  LoadingPort,
+  NotificationPort
+} from './types/gateway-client.types'
 
 export type {
   HttpClientConfig,
   RequestHeader,
   RequestStreamOptions
 } from './types/abstract-service.types'
+export type {
+  AuthRedirectPort,
+  GatewayClientConfig,
+  LoadingPort,
+  NotificationPort
+} from './types/gateway-client.types'
+export {AppError} from './errors/app-error'
 
 // ==================== AbstractService ====================
 
@@ -71,14 +90,22 @@ export abstract class AbstractService {
     HEADER_KEYS: 'headerKeys'
   }
 
-  protected router: Router
-  protected translate: TranslateService
+  protected router: Router | null
+  protected translate: TranslateService | null
 
-  private readonly config: Required<HttpClientConfig>
+  private config: Required<Omit<HttpClientConfig, 'hardwareFingerprintHmacSecret'>> &
+    Pick<HttpClientConfig, 'hardwareFingerprintHmacSecret'>
   private readonly eccModule: EccCryptoModule
   private readonly duplicateModule: DuplicateSubmitModule
   public readonly clientId: string
-  private readonly headerStorageKey: string
+  private readonly loadingPort: LoadingPort
+  private readonly notificationPort: NotificationPort
+  private readonly authRedirectPort: AuthRedirectPort
+  private managedHeaders: Record<string, string> = {}
+  private managedHeadersExpiresAt = 0
+  private handshakePromise: Promise<void> | null = null
+  private reHandshakePromise: Promise<void> | null = null
+  private activeLoadingRequests = 0
   // 缓存设备ID，避免重复生成
   private deviceIdCache: string | null = null
   // 缓存 HMAC 密钥（解码后），避免重复计算
@@ -87,26 +114,41 @@ export abstract class AbstractService {
   /**
    * 构造服务基础能力：路由、国际化、默认配置、加密模块与防重复模块。
    */
-  constructor() {
+  constructor(config: Partial<HttpClientConfig> = {}) {
     // 注入框架能力，供鉴权失效跳转与多语言提示复用
-    this.router = inject(Router)
-    this.translate = inject(TranslateService)
-    // 优先读取动态网关地址，未提供时回退到默认占位地址
-    const baseUrl = Url.dynamicUrl || (typeof window !== 'undefined' ? (window as any).__RYDEEN_BASE_URL__ : '') || ''
+    this.router = inject(Router, {optional: true})
+    this.translate = inject(TranslateService, {optional: true})
+    this.loadingPort = inject(LOADING_PORT)
+    this.notificationPort = inject(NOTIFICATION_PORT)
+    this.authRedirectPort = inject(AUTH_REDIRECT_PORT)
+    const injectedConfig = inject(GATEWAY_CLIENT_CONFIG, {optional: true}) ?? {}
+    // 配置优先级：构造参数 > provider > 兼容的 Url.dynamicUrl > SSR-safe 全局运行时配置。
+    const runtimeBaseUrl =
+      typeof globalThis !== 'undefined'
+        ? String((globalThis as {__RYDEEN_BASE_URL__?: unknown}).__RYDEEN_BASE_URL__ ?? '')
+        : ''
+    const baseUrl = config.baseUrl ?? injectedConfig.baseUrl ?? (Url.dynamicUrl || runtimeBaseUrl)
+    const mergedConfig = {...injectedConfig, ...config}
     this.config = {
-      baseUrl: baseUrl || 'https://your-gateway-domain.com',
-      clientId: this.generateClientId(),
-      duplicateSubmitTimeWindow: 3000,
-      showLoading: true,
-      maxRetries: 3,
-      retryInterval: 1000,
-      timeout: 30000,
-      enableHeaderAutoManagement: true,
-      headerStorageKey: 'http_headers',
-      hardwareFingerprintHmacSecret: null
+      baseUrl: baseUrl || '',
+      clientId: mergedConfig.clientId ?? this.generateClientId(),
+      duplicateSubmitTimeWindow: mergedConfig.duplicateSubmitTimeWindow ?? 3000,
+      showLoading: mergedConfig.showLoading ?? true,
+      maxRetries: mergedConfig.maxRetries ?? 3,
+      retryInterval: mergedConfig.retryInterval ?? 1000,
+      timeout: mergedConfig.timeout ?? 30000,
+      enableHeaderAutoManagement: mergedConfig.enableHeaderAutoManagement ?? false,
+      headerStorageKey: mergedConfig.headerStorageKey ?? 'http_headers',
+      managedResponseHeaders: (mergedConfig.managedResponseHeaders ?? []).map((header) => header.toLowerCase()),
+      persistManagedHeaders: mergedConfig.persistManagedHeaders ?? false,
+      managedHeadersTtlMs: mergedConfig.managedHeadersTtlMs ?? 5 * 60_000,
+      sendHardwareFingerprint: mergedConfig.sendHardwareFingerprint ?? false,
+      allowUnsignedHardwareFingerprint: mergedConfig.allowUnsignedHardwareFingerprint ?? false,
+      cryptoExchangePath: mergedConfig.cryptoExchangePath ?? '/api/crypto/exchange',
+      protocolVersion: mergedConfig.protocolVersion ?? '1',
+      hardwareFingerprintHmacSecret: mergedConfig.hardwareFingerprintHmacSecret ?? null
     }
     this.clientId = this.config.clientId
-    this.headerStorageKey = this.config.headerStorageKey
     this.eccModule = new EccCryptoModule()
     this.duplicateModule = new DuplicateSubmitModule(this.config.duplicateSubmitTimeWindow)
   }
@@ -115,7 +157,11 @@ export abstract class AbstractService {
    * 生成当前客户端唯一标识，用于请求头透传和密钥交换。
    */
   private generateClientId(): string {
-    return 'client_' + Date.now() + '_' + Math.random().toString(36).substr(2, 9)
+    const randomId =
+      typeof globalThis !== 'undefined' && typeof globalThis.crypto?.randomUUID === 'function'
+        ? globalThis.crypto.randomUUID()
+        : Math.random().toString(36).slice(2, 11)
+    return `client_${Date.now()}_${randomId}`
   }
 
   /**
@@ -127,7 +173,7 @@ export abstract class AbstractService {
    */
   async request<T>(
     url: Url,
-    body?: any,
+    body?: unknown,
     header?: RequestHeader,
     finalizeCallback?: Callback<T>
   ): Promise<ApiResult<T>> {
@@ -138,15 +184,15 @@ export abstract class AbstractService {
       } catch (_) {}
       return {
         code: -1,
-        msg: this.translate.instant('app.common.request.type.error')
+        msg: this.translateText('app.common.request.type.error', 'Request type is not supported')
       } as unknown as ApiResult<T>
     }
 
     // 统一兼容 path 参数数组与 GET query 对象两类入参
     const pathParams = Array.isArray(body) ? body : undefined
-    const queryParams =
+    const queryParams: Record<string, unknown> | undefined =
       url.method === Method.GET && body != null && typeof body === 'object' && !Array.isArray(body)
-        ? body
+        ? body as Record<string, unknown>
         : undefined
     const options: RequestOptions = {
       body: pathParams == null && queryParams == null ? body : queryParams ?? (url.method !== Method.GET ? body : undefined),
@@ -196,9 +242,9 @@ export abstract class AbstractService {
    * })
    * ```
    */
-  public requestStream<T = any>(
+  public requestStream<T = unknown>(
     url: Url,
-    body?: any,
+    body?: unknown,
     header?: RequestHeader,
     options?: RequestStreamOptions<T>
   ): Observable<T> {
@@ -208,6 +254,7 @@ export abstract class AbstractService {
       const method = url.method
       let requestId: string | undefined
       let cleaned = false
+      let loadingShown = false
       const timeoutId = setTimeout(() => abortController.abort(), this.config.timeout)
 
       const cleanup = () => {
@@ -220,9 +267,11 @@ export abstract class AbstractService {
             this.duplicateModule.clearRequest(requestId)
           } catch (_) {}
         }
-        try {
-          this.hideLoadingState()
-        } catch (_) {}
+        if (loadingShown) {
+          try {
+            this.hideLoadingState()
+          } catch (_) {}
+        }
       }
 
       const run = async () => {
@@ -236,9 +285,9 @@ export abstract class AbstractService {
 
           // 复用 request() 的 fullUrl 拼接逻辑（GET 兼容 query / path 参数）
           const pathParams = Array.isArray(body) ? body : undefined
-          const queryParams =
+          const queryParams: Record<string, unknown> | undefined =
             url.method === Method.GET && body != null && typeof body === 'object' && !Array.isArray(body)
-              ? body
+              ? body as Record<string, unknown>
               : undefined
           const fullUrl = this.buildFullUrl(url, pathParams, queryParams)
 
@@ -259,14 +308,17 @@ export abstract class AbstractService {
 
             // 同时间窗内检测到重复请求时直接拦截
             if (this.duplicateModule.isDuplicateRequest(requestId)) {
-              subscriber.error(new Error('DUPLICATE_REQUEST'))
+              subscriber.error(new AppError('duplicate', 'Duplicate request'))
               cleanup()
               return
             }
             this.duplicateModule.recordRequest(requestId, fullUrl)
           }
 
-          if (this.config.showLoading) this.showLoadingState()
+          if (this.config.showLoading) {
+            this.showLoadingState()
+            loadingShown = true
+          }
 
           // 2) 发起明文 SSE 请求
           const cachedHeaders = this.config.enableHeaderAutoManagement ? this.loadCachedHeaders() : {}
@@ -287,12 +339,15 @@ export abstract class AbstractService {
             !isUint8Array &&
             !(typeof optionsBody === 'string')
 
-          const requestHeaders: Record<string, string> = {
-            'X-Client-Timestamp': Date.now().toString(),
-            ...deviceHeaders,
-            ...cachedHeaders,
-            ...(header || {})
-          }
+          const requestHeaders = this.mergeHeaders(
+            {
+              'X-Client-Timestamp': Date.now().toString(),
+              'X-Gateway-Protocol-Version': this.config.protocolVersion
+            },
+            deviceHeaders,
+            cachedHeaders,
+            header || {}
+          )
           if (options?.intent != null && String(options.intent) !== '') {
             requestHeaders['X-Rydeen-Agent-Intent'] = String(options.intent)
           }
@@ -350,7 +405,7 @@ export abstract class AbstractService {
 
           if (response.status === 401) {
             await this.clearAuthAndRedirect()
-            subscriber.error(new Error('UNAUTHORIZED'))
+            subscriber.error(new AppError('unauthorized', this.translateText('app.common.request.unauthorized', 'Unauthorized'), {status: 401}))
             cleanup()
             return
           }
@@ -361,33 +416,35 @@ export abstract class AbstractService {
             try {
               responseText = await response.text()
             } catch (_) {}
-            const error: any = new Error(`SSE_HTTP_ERROR: ${response.status} ${response.statusText}`)
-            error.status = response.status
-            error.statusText = response.statusText
-            error.responseText = responseText
-            subscriber.error(error)
+            subscriber.error(new AppError(
+              response.status === 429 ? 'rate-limited' : response.status >= 500 ? 'server' : 'unknown',
+              `SSE HTTP ${response.status}: ${response.statusText}`,
+              {status: response.status, responseBody: responseText, retryAfterMs: this.parseRetryAfter(response.headers.get('Retry-After'))}
+            ))
             cleanup()
             return
           }
 
           if (!response.body) {
-            subscriber.error(new Error('SSE response body is empty'))
+            subscriber.error(new AppError('protocol', 'SSE response body is empty'))
             cleanup()
             return
           }
 
           const reader = response.body.getReader()
           const decoder = new TextDecoder()
-          let buffer = ''
           let finished = false
+          const parser = new SseParser(AbstractService.MAX_SSE_BUFFER_SIZE)
 
           // 处理单个 envelope 并根据协议约定触发 complete / error
-          const handleEnvelope = (envelope: any) => {
+          const handleEnvelope = (envelope: unknown) => {
             if (finished) return
             subscriber.next(envelope as T)
 
             // 仅在存在 kind 字段时做 done/error 处理；否则保持纯透传，交由调用方自行结束/取消订阅
-            const kind = envelope?.kind
+            const kind = envelope && typeof envelope === 'object'
+              ? (envelope as {kind?: unknown}).kind
+              : undefined
             if (kind === 'done') {
               finished = true
               subscriber.complete()
@@ -395,7 +452,9 @@ export abstract class AbstractService {
               cleanup()
             } else if (kind === 'error') {
               finished = true
-              const payload: any = envelope?.payload
+              const payload = envelope && typeof envelope === 'object'
+                ? (envelope as {payload?: {code?: unknown; message?: unknown}}).payload
+                : undefined
               const code = payload?.code != null ? String(payload.code) : ''
               const msg = payload?.message != null ? String(payload.message) : 'SSE_ERROR'
               subscriber.error(Object.assign(new Error(msg), { code, envelope }))
@@ -404,60 +463,26 @@ export abstract class AbstractService {
             }
           }
 
-          // 3) SSE 分帧读取：以空行分隔事件块
+          // 3) SSE 增量分帧读取：解析器处理 CRLF、跨 chunk 和 EOF 尾帧。
           while (!finished) {
             const { value, done } = await reader.read()
-            if (done) break
-            // 按 chunk 累积文本，统一转为 \n 便于后续分帧
-            buffer += decoder.decode(value, { stream: true })
-            buffer = buffer.replace(/\r\n/g, '\n')
-            // 防止异常流导致缓冲区无限增长
-            if (buffer.length > AbstractService.MAX_SSE_BUFFER_SIZE) {
-              finished = true
-              subscriber.error(
-                new Error(
-                  `SSE buffer overflow: exceeded ${AbstractService.MAX_SSE_BUFFER_SIZE} bytes without event delimiter`
-                )
+            if (done) {
+              const tail = decoder.decode()
+              if (tail) parser.feed(tail, (event) =>
+                this.handleSseEvent(event.data, options, handleEnvelope, subscriber, abortController, cleanup, () => { finished = true })
               )
-              abortController.abort()
-              cleanup()
+              parser.end((event) => this.handleSseEvent(event.data, options, handleEnvelope, subscriber, abortController, cleanup, () => { finished = true }))
               break
             }
-
-            let sepIndex: number
-            while ((sepIndex = buffer.indexOf('\n\n')) !== -1) {
-              const block = buffer.slice(0, sepIndex)
-              buffer = buffer.slice(sepIndex + 2)
-
-              if (!block.trim()) continue
-
-              // SSE event block：形如
-              // event: token
-              // data: {"v":1,...}
-              const lines = block.split('\n')
-              const dataLines: string[] = []
-              for (const line of lines) {
-                if (line.startsWith('data:')) {
-                  dataLines.push(line.slice(5).trimStart())
-                }
-              }
-
-              if (dataLines.length === 0) continue
-
-              const dataStr = dataLines.join('\n')
-              try {
-                // 解析器可由调用方覆盖，默认按 JSON envelope 处理
-                const envelope = options?.parseSseData
-                  ? options.parseSseData(dataStr)
-                  : (JSON.parse(dataStr) as T)
-                handleEnvelope(envelope)
-              } catch (e) {
-                finished = true
-                subscriber.error(new Error('SSE data parse error'))
-                abortController.abort()
-                cleanup()
-                break
-              }
+            try {
+              parser.feed(decoder.decode(value, {stream: true}), (event) =>
+                this.handleSseEvent(event.data, options, handleEnvelope, subscriber, abortController, cleanup, () => { finished = true })
+              )
+            } catch (error) {
+              finished = true
+              subscriber.error(error)
+              abortController.abort()
+              cleanup()
             }
           }
 
@@ -465,9 +490,11 @@ export abstract class AbstractService {
             subscriber.complete()
             cleanup()
           }
-        } catch (err: any) {
+        } catch (err: unknown) {
           try {
-            subscriber.error(err)
+            if (!(err instanceof Error && err.name === 'AbortError') && !subscriber.closed) {
+              subscriber.error(err instanceof AppError ? err : new AppError('network', 'SSE request failed', {cause: err}))
+            }
           } finally {
             // 无论异常来源是网络、解析还是取消，都统一收尾
             cleanup()
@@ -485,13 +512,35 @@ export abstract class AbstractService {
     })
   }
 
+  private handleSseEvent<T>(
+    rawData: string,
+    options: RequestStreamOptions<T> | undefined,
+    handleEnvelope: (envelope: unknown) => void,
+    subscriber: Subscriber<T>,
+    abortController: AbortController,
+    cleanup: () => void,
+    markFinished: () => void
+  ): void {
+    try {
+      const envelope = options?.parseSseData
+        ? options.parseSseData(rawData)
+        : (JSON.parse(rawData) as T)
+      handleEnvelope(envelope)
+    } catch (cause) {
+      markFinished()
+      subscriber.error(new AppError('protocol', 'SSE data parse error', {cause}))
+      abortController.abort()
+      cleanup()
+    }
+  }
+
   /**
    * 内部统一请求：防重复、加载态、加密/明文、响应头保存、401 处理
    */
   private async doRequest<T>(
     url: Url,
     options: RequestOptions,
-    queryParams?: Record<string, any>
+    queryParams?: Record<string, unknown>
   ): Promise<ApiResult<T>> {
     // 统一构建最终请求 URL，保证 path/query 拼接策略一致
     const fullUrl = this.buildFullUrl(url, options.pathParams, queryParams)
@@ -506,7 +555,7 @@ export abstract class AbstractService {
         this.duplicateModule.generateRequestId(fullUrl, method, options.body, userId)
       if (this.duplicateModule.isDuplicateRequest(requestId)) {
         console.warn('[防重复提交] 检测到重复请求，已忽略:', requestId)
-        throw new Error('DUPLICATE_REQUEST')
+        throw new AppError('duplicate', 'Duplicate request', {code: 'DUPLICATE_REQUEST', requestId})
       }
       this.duplicateModule.recordRequest(requestId, fullUrl)
     }
@@ -514,18 +563,14 @@ export abstract class AbstractService {
     try {
       if (this.config.showLoading) this.showLoadingState()
 
-      let response: Response
-      // 按接口标记选择加密链路或明文链路
-      if (url.needEncryption) {
-        response = await this.sendEncryptedRequest(
-          fullUrl,
-          method,
-          options,
-          options.allowRetry !== false
-        )
-      } else {
-        response = await this.sendPlainRequest(fullUrl, method, options)
-      }
+      const response = await this.executeWithRetry(
+        () =>
+          url.needEncryption
+            ? this.sendEncryptedRequest(fullUrl, method, options, options.allowRetry !== false)
+            : this.sendPlainRequest(fullUrl, method, options),
+        method,
+        options
+      )
 
       if (this.config.enableHeaderAutoManagement) this.saveResponseHeaders(response)
 
@@ -534,9 +579,10 @@ export abstract class AbstractService {
 
       if (requestId) this.duplicateModule.clearRequest(requestId)
       return result
-    } catch (error: any) {
+    } catch (error: unknown) {
+      const normalizedError = this.normalizeError(error)
       if (requestId) {
-        if (error?.message === 'DUPLICATE_SUBMIT') {
+        if (normalizedError instanceof AppError && (normalizedError.kind === 'duplicate' || normalizedError.code === 'DUPLICATE_SUBMIT')) {
           setTimeout(
             () => this.duplicateModule.clearRequest(requestId!),
             this.config.duplicateSubmitTimeWindow
@@ -545,7 +591,7 @@ export abstract class AbstractService {
           this.duplicateModule.clearRequest(requestId)
         }
       }
-      throw error
+      throw normalizedError
     } finally {
       // 请求生命周期结束后兜底关闭 loading
       if (this.config.showLoading) this.hideLoadingState()
@@ -560,10 +606,11 @@ export abstract class AbstractService {
    */
   private buildFullUrl(
     url: Url,
-    pathParams?: any[],
-    queryParams?: Record<string, any>
+    pathParams?: unknown[],
+    queryParams?: Record<string, unknown>
   ): string {
-    let u = pathParams != null ? url.value(pathParams) : url.value()
+    let u = pathParams != null ? url.value(pathParams, this.config.baseUrl) : url.value(undefined, this.config.baseUrl)
+    u = this.resolveAbsoluteUrl(u)
     if (queryParams != null && Object.keys(queryParams).length > 0) {
       const search = new URLSearchParams()
       for (const k of Object.keys(queryParams)) {
@@ -575,6 +622,85 @@ export abstract class AbstractService {
       u = q ? `${u}${u.includes('?') ? '&' : '?'}${q}` : u
     }
     return u
+  }
+
+  private resolveAbsoluteUrl(value: string): string {
+    if (!value) return this.config.baseUrl
+    try {
+      return new URL(value, this.config.baseUrl || undefined).toString()
+    } catch (_) {
+      const base = this.config.baseUrl.replace(/\/$/, '')
+      return value.startsWith('/') || !base ? `${base}${value}` : `${base}/${value}`
+    }
+  }
+
+  private async executeWithRetry(
+    send: () => Promise<Response>,
+    method: string,
+    options: RequestOptions
+  ): Promise<Response> {
+    let attempt = 0
+    while (true) {
+      try {
+        const response = await send()
+        if (response.status !== 423 || attempt >= this.config.maxRetries || !this.canRetry(method, options)) {
+          return response
+        }
+        if (response.ok || !this.canRetryStatus(response.status)) return response
+        throw await this.createHttpError(response)
+      } catch (error) {
+        if (attempt >= this.config.maxRetries || !this.canRetry(method, options) || !this.canRetryError(error)) {
+          throw error
+        }
+        attempt += 1
+        const delay = this.retryDelay(attempt, error)
+        await new Promise((resolve) => setTimeout(resolve, delay))
+      }
+    }
+  }
+
+  private canRetry(method: string, options: RequestOptions): boolean {
+    return ['GET', 'HEAD', 'OPTIONS'].includes(method.toUpperCase()) || Boolean(options.idempotencyKey)
+  }
+
+  private canRetryStatus(status: number): boolean {
+    return status === 408 || status === 425 || status === 429 || status >= 500
+  }
+
+  private canRetryError(error: unknown): boolean {
+    if (error instanceof AppError) return error.kind === 'network' || error.kind === 'timeout' || error.kind === 'rate-limited' || error.kind === 'server'
+    return error instanceof TypeError || (error instanceof Error && /timeout|network|fetch/i.test(error.message))
+  }
+
+  private retryDelay(attempt: number, error: unknown): number {
+    const retryAfter = error instanceof AppError ? error.retryAfterMs : undefined
+    return retryAfter ?? Math.min(this.config.retryInterval * 2 ** (attempt - 1), 30_000)
+  }
+
+  private async createHttpError(response: Response): Promise<AppError> {
+    let body: unknown
+    try {
+      const text = await response.clone().text()
+      body = text ? JSON.parse(text) : undefined
+    } catch (_) {
+      body = undefined
+    }
+    const retryAfter = response.headers.get('Retry-After')
+    const retryAfterMs = retryAfter
+      ? /^\d+$/.test(retryAfter)
+        ? Number(retryAfter) * 1000
+        : Math.max(0, Date.parse(retryAfter) - Date.now())
+      : undefined
+    return new AppError(
+      response.status === 429 ? 'rate-limited' : response.status >= 500 ? 'server' : 'unknown',
+      `HTTP ${response.status}: ${response.statusText}`,
+      {
+        status: response.status,
+        retryAfterMs,
+        responseBody: body,
+        traceId: response.headers.get('X-Trace-Id') ?? response.headers.get('traceparent') ?? undefined
+      }
+    )
   }
 
   /**
@@ -591,25 +717,28 @@ export abstract class AbstractService {
     allowRetry: boolean
   ): Promise<Response> {
     // 首次加密请求前自动完成密钥交换
-    if (!this.eccModule.isInitialized()) {
-      await this.eccModule.exchangeKeys(this.config.baseUrl, this.clientId)
-    }
+    await this.ensureHandshake()
 
     const cachedHeaders = this.config.enableHeaderAutoManagement ? this.loadCachedHeaders() : {}
     const deviceHeaders = await this.buildDeviceHeaders()
 
-    const headers: Record<string, string> = {
+    const headers = this.mergeHeaders(
+      {
       'Content-Type': 'application/json',
       'X-Client-Id': this.clientId,
       'X-Gateway-KeyId': this.eccModule.gatewayKeyId || '',
       'X-Client-Timestamp': Date.now().toString(),
-      ...deviceHeaders,
-      ...cachedHeaders,
-      ...(options.headers || {})
-    }
+      'X-Gateway-Protocol-Version': this.config.protocolVersion,
+      },
+      deviceHeaders,
+      cachedHeaders,
+      options.headers || {}
+    )
+
+    if (options.idempotencyKey) headers['Idempotency-Key'] = options.idempotencyKey
 
     let requestBody: string | null = null
-    if (options.body && method !== Method.GET) {
+    if (options.body != null && method !== Method.GET) {
       // 按当前协议：请求体保持 JSON，同时在头里透传密文
       const jsonData = JSON.stringify(options.body)
       headers['X-Encrypted-Data'] = await this.eccModule.encrypt(jsonData)
@@ -620,14 +749,17 @@ export abstract class AbstractService {
       method,
       headers,
       body: requestBody,
-      signal: AbortSignal.timeout(this.config.timeout)
+      signal: this.createTimeoutSignal()
     })
 
     // 网关要求重新握手时，仅允许自动重试一次避免无限递归
     if (response.status === 423) {
-      const result = await response.json()
-      if (result.needReHandshake && allowRetry) {
-        await this.eccModule.reHandshake(result.keyId, result.gatewayPublicKey)
+      let result: {needReHandshake?: boolean; keyId?: string; gatewayPublicKey?: string} = {}
+      try {
+        result = await response.clone().json()
+      } catch (_) {}
+      if (result.needReHandshake && allowRetry && result.keyId && result.gatewayPublicKey) {
+        await this.ensureReHandshake(result.keyId, result.gatewayPublicKey)
         return this.sendEncryptedRequest(url, method, options, false)
       }
     }
@@ -649,20 +781,36 @@ export abstract class AbstractService {
     const cachedHeaders = this.config.enableHeaderAutoManagement ? this.loadCachedHeaders() : {}
     const deviceHeaders = await this.buildDeviceHeaders()
 
-    const headers: Record<string, string> = {
-      'Content-Type': 'application/json',
+    const headers = this.mergeHeaders(
+      {
       'X-Client-Timestamp': Date.now().toString(),
-      ...deviceHeaders,
-      ...cachedHeaders,
-      ...(options.headers || {})
-    }
+      'X-Gateway-Protocol-Version': this.config.protocolVersion,
+      },
+      deviceHeaders,
+      cachedHeaders,
+      options.headers || {}
+    )
+
+    if (options.idempotencyKey) headers['Idempotency-Key'] = options.idempotencyKey
 
     const userId = this.getUserId()
     if (userId) headers['X-User-Id'] = userId
 
-    let requestBody: string | null = null
-    if (options.body && method !== Method.GET) {
-      requestBody = JSON.stringify(options.body)
+    let requestBody: BodyInit | null = null
+    if (options.body != null && method !== Method.GET) {
+      const body = options.body
+      if (
+        typeof body === 'string' ||
+        (typeof Blob !== 'undefined' && body instanceof Blob) ||
+        (typeof FormData !== 'undefined' && body instanceof FormData) ||
+        (typeof URLSearchParams !== 'undefined' && body instanceof URLSearchParams) ||
+        (typeof ArrayBuffer !== 'undefined' && body instanceof ArrayBuffer)
+      ) {
+        requestBody = body
+      } else {
+        requestBody = JSON.stringify(body)
+        if (!this.hasHeader(headers, 'Content-Type')) headers['Content-Type'] = 'application/json'
+      }
     }
 
     // 使用 fetch + timeout 发送明文请求
@@ -670,8 +818,64 @@ export abstract class AbstractService {
       method,
       headers,
       body: requestBody,
-      signal: AbortSignal.timeout(this.config.timeout)
+      signal: this.createTimeoutSignal()
     })
+  }
+
+  private hasHeader(headers: Record<string, string>, name: string): boolean {
+    const target = name.toLowerCase()
+    return Object.keys(headers).some((key) => key.toLowerCase() === target)
+  }
+
+  private mergeHeaders(...sources: Array<Record<string, string>>): Record<string, string> {
+    const result: Record<string, string> = {}
+    for (const source of sources) {
+      for (const [key, value] of Object.entries(source)) {
+        const existing = Object.keys(result).find((current) => current.toLowerCase() === key.toLowerCase())
+        if (existing) delete result[existing]
+        result[key] = String(value)
+      }
+    }
+    return result
+  }
+
+  private createTimeoutSignal(): AbortSignal {
+    const controller = new AbortController()
+    const timeoutId = setTimeout(() => controller.abort(), this.config.timeout)
+    controller.signal.addEventListener('abort', () => clearTimeout(timeoutId), {once: true})
+    return controller.signal
+  }
+
+  private async ensureHandshake(): Promise<void> {
+    if (this.eccModule.isInitialized()) return
+    if (!this.handshakePromise) {
+      this.handshakePromise = this.eccModule
+        .exchangeKeys(this.config.baseUrl, this.clientId, this.config.cryptoExchangePath, this.config.protocolVersion)
+        .then(() => undefined)
+        .finally(() => {
+          this.handshakePromise = null
+        })
+    }
+    await this.handshakePromise
+  }
+
+  private async ensureReHandshake(keyId: string, gatewayPublicKey: string): Promise<void> {
+    if (this.eccModule.gatewayKeyId === keyId) return
+    if (!this.reHandshakePromise) {
+      this.reHandshakePromise = this.eccModule
+        .reHandshake(keyId, gatewayPublicKey)
+        .finally(() => {
+          this.reHandshakePromise = null
+        })
+    }
+    await this.reHandshakePromise
+  }
+
+  private resolveExchangeBaseUrl(): string {
+    const path = this.config.cryptoExchangePath || '/api/crypto/exchange'
+    if (/^https?:\/\//i.test(path)) return path
+    const base = this.config.baseUrl.replace(/\/$/, '')
+    return `${base}${path.startsWith('/') ? path : `/${path}`}`
   }
 
   /**
@@ -687,36 +891,43 @@ export abstract class AbstractService {
     const responseText = await response.text()
 
     if (!response.ok) {
-      const error: any = new Error(`HTTP ${response.status}: ${response.statusText}`)
-      error.status = response.status
-      error.response = response
-
-      // 429 可能包含业务去重码，需尝试解析后给出友好提示
-      if (response.status === 429) {
-        let errorData: any = {}
-        try {
-          if (needDecryption && response.headers.get('X-Response-Encrypted') === 'true') {
-            const decryptedText = await this.eccModule.decrypt(responseText)
-            errorData = JSON.parse(decryptedText)
-          } else {
-            errorData = responseText ? JSON.parse(responseText) : {}
-          }
-        } catch (_) {}
-        if (errorData.code === 'DUPLICATE_SUBMIT') {
-          error.message = 'DUPLICATE_SUBMIT'
-          this.showErrorMessage(this.translate.instant('app.common.request.duplicate') || '请求过于频繁，请稍后再试')
+      let errorData: unknown
+      try {
+        const decodedText =
+          needDecryption && response.headers.get('X-Response-Encrypted') === 'true'
+            ? await this.eccModule.decrypt(responseText)
+            : responseText
+        errorData = decodedText ? JSON.parse(decodedText) : undefined
+      } catch (_) {
+        errorData = responseText || undefined
+      }
+      const errorCode = this.readErrorCode(errorData)
+      if (response.status === 401) await this.clearAuthAndRedirect()
+      const error = new AppError(
+        response.status === 401
+          ? 'unauthorized'
+          : response.status === 403
+            ? 'forbidden'
+            : response.status === 429
+              ? errorCode === 'DUPLICATE_SUBMIT'
+                ? 'duplicate'
+                : 'rate-limited'
+              : response.status >= 500
+                ? 'server'
+                : 'unknown',
+        errorCode === 'DUPLICATE_SUBMIT'
+          ? this.translateText('app.common.request.duplicate', 'Request was submitted already')
+          : response.status === 401
+            ? this.translateText('app.common.request.unauthorized', 'Unauthorized')
+            : `HTTP ${response.status}: ${response.statusText}`,
+        {
+          status: response.status,
+          code: errorCode,
+          traceId: response.headers.get('X-Trace-Id') ?? response.headers.get('traceparent') ?? undefined,
+          retryAfterMs: this.parseRetryAfter(response.headers.get('Retry-After')),
+          responseBody: errorData
         }
-      }
-
-      // 401 统一清理鉴权信息并跳转首页
-      if (response.status === 401) {
-        await this.clearAuthAndRedirect()
-        return {
-          code: 401,
-          msg: this.translate.instant('app.common.request.unauthorized') || '未授权'
-        } as unknown as ApiResult<T>
-      }
-
+      )
       throw error
     }
 
@@ -726,18 +937,56 @@ export abstract class AbstractService {
       return JSON.parse(decryptedText) as ApiResult<T>
     }
 
-    // 默认按 JSON 响应解析，空响应体回退空对象
-    return responseText ? (JSON.parse(responseText) as ApiResult<T>) : ({} as ApiResult<T>)
+    // 204/空响应不强制伪造业务 envelope，保持兼容并避免 JSON.parse 空字符串。
+    if (!responseText || response.status === 204) return {} as ApiResult<T>
+    const contentType = response.headers.get('content-type')?.toLowerCase() ?? ''
+    if (contentType.includes('json') || responseText.trimStart().startsWith('{')) {
+      try {
+        return JSON.parse(responseText) as ApiResult<T>
+      } catch (cause) {
+        throw new AppError('protocol', 'Invalid JSON response', {cause, responseBody: responseText})
+      }
+    }
+    return responseText as unknown as ApiResult<T>
+  }
+
+  private readErrorCode(errorData: unknown): string | undefined {
+    if (!errorData || typeof errorData !== 'object') return undefined
+    const record = errorData as Record<string, unknown>
+    const nested = record['error']
+    const code = record['code'] ?? (nested && typeof nested === 'object' ? (nested as Record<string, unknown>)['code'] : undefined)
+    return code == null ? undefined : String(code)
+  }
+
+  private parseRetryAfter(value: string | null): number | undefined {
+    if (!value) return undefined
+    if (/^\d+$/.test(value)) return Number(value) * 1000
+    const timestamp = Date.parse(value)
+    return Number.isFinite(timestamp) ? Math.max(0, timestamp - Date.now()) : undefined
+  }
+
+  private normalizeError(error: unknown): AppError | unknown {
+    if (error instanceof AppError) return error
+    if (error instanceof Error) {
+      return new AppError(
+        error.name === 'AbortError' ? 'timeout' : 'network',
+        error.message || 'Network request failed',
+        {cause: error}
+      )
+    }
+    return new AppError('unknown', 'Request failed', {cause: error})
   }
 
   /**
    * 清理鉴权相关本地状态并跳转到首页。
    */
   private async clearAuthAndRedirect(): Promise<void> {
-    if (typeof window !== 'undefined') {
+    this.managedHeaders = {}
+    this.managedHeadersExpiresAt = 0
+    if (this.config.persistManagedHeaders && typeof window !== 'undefined') {
       try {
         // 仅清理框架相关鉴权键，避免误伤宿主应用其他缓存
-        localStorage.removeItem(this.headerStorageKey)
+        localStorage.removeItem(this.config.headerStorageKey)
         const authKeys = ['userId', 'token', 'accessToken', 'refreshToken']
         authKeys.forEach((key) => {
           localStorage.removeItem(key)
@@ -745,7 +994,13 @@ export abstract class AbstractService {
         })
       } catch (_) {}
     }
-    await this.router.navigateByUrl('/')
+    await this.authRedirectPort.clearSession?.()
+    if (this.authRedirectPort.redirect) {
+      await this.authRedirectPort.redirect(typeof location !== 'undefined' ? location.href : undefined)
+    } else if (this.router) {
+      // 兼容旧应用：只有没有提供端口时才保留 Router fallback。
+      await this.router.navigateByUrl('/')
+    }
   }
 
   /**
@@ -774,13 +1029,14 @@ export abstract class AbstractService {
     } catch (e) {
       console.warn('[AbstractService] 生成设备ID失败:', e)
     }
+    if (!this.config.sendHardwareFingerprint) return headers
     try {
       const hmacSecret = this.getHardwareFingerprintHmacSecret()
       if (hmacSecret) {
         // 配置了密钥时，发送签名后的安全指纹
         const secureFingerprint = await generateSecureHardwareFingerprint()
         headers['X-Hardware-Fingerprint'] = await signHardwareFingerprint(secureFingerprint, hmacSecret)
-      } else {
+      } else if (this.config.allowUnsignedHardwareFingerprint) {
         // 未配置密钥时保持旧行为，发送原始指纹 JSON
         const fingerprint = await generateHardwareFingerprint()
         const fingerprintJson = fingerprintToString(fingerprint)
@@ -796,12 +1052,26 @@ export abstract class AbstractService {
    * 读取本地缓存的业务响应头。
    */
   private loadCachedHeaders(): Record<string, string> {
-    if (typeof window === 'undefined') return {}
+    if (this.managedHeadersExpiresAt > 0 && this.managedHeadersExpiresAt <= Date.now()) {
+      this.managedHeaders = {}
+      this.managedHeadersExpiresAt = 0
+    }
+    if (Object.keys(this.managedHeaders).length > 0) return {...this.managedHeaders}
+    if (!this.config.persistManagedHeaders || typeof window === 'undefined') return {}
     try {
-      const cached = localStorage.getItem(this.headerStorageKey)
+      const cached = localStorage.getItem(this.config.headerStorageKey)
       if (!cached) return {}
-      const headers = JSON.parse(cached)
-      return headers || {}
+      const parsed: unknown = JSON.parse(cached)
+      if (!parsed || typeof parsed !== 'object') return {}
+      const stored = parsed as {headers?: Record<string, unknown>; expiresAt?: number} & Record<string, unknown>
+      const headers = stored.headers && typeof stored.headers === 'object' ? stored.headers : stored
+      const expiresAt = typeof stored.expiresAt === 'number'
+        ? stored.expiresAt
+        : Date.now() + this.config.managedHeadersTtlMs
+      if (expiresAt <= Date.now()) return {}
+      this.managedHeadersExpiresAt = expiresAt
+      this.managedHeaders = this.filterManagedHeaders(headers)
+      return {...this.managedHeaders}
     } catch (_) {
       return {}
     }
@@ -814,48 +1084,59 @@ export abstract class AbstractService {
   private saveResponseHeaders(response: Response): void {
     if (typeof window === 'undefined') return
     try {
-      const businessHeaders: Record<string, string> = {}
+      const businessHeaders: Record<string, unknown> = {}
       response.headers.forEach((value, key) => {
         const lowerKey = key.toLowerCase()
-        if (!AbstractService.SYSTEM_HEADERS.has(lowerKey)) {
-          businessHeaders[key] = value
+        if (
+          this.config.managedResponseHeaders.includes(lowerKey) &&
+          !AbstractService.SYSTEM_HEADERS.has(lowerKey) &&
+          !/authorization|token|cookie|secret|password|refresh/i.test(lowerKey)
+        ) {
+          businessHeaders[lowerKey] = value
         }
       })
       if (Object.keys(businessHeaders).length > 0) {
-        const merged = { ...this.loadCachedHeaders(), ...businessHeaders }
-        localStorage.setItem(this.headerStorageKey, JSON.stringify(merged))
+        this.managedHeaders = this.filterManagedHeaders({...this.loadCachedHeaders(), ...businessHeaders})
+        this.managedHeadersExpiresAt = Date.now() + this.config.managedHeadersTtlMs
+        if (this.config.persistManagedHeaders && typeof window !== 'undefined') {
+          localStorage.setItem(this.config.headerStorageKey, JSON.stringify({
+            headers: this.managedHeaders,
+            expiresAt: this.managedHeadersExpiresAt
+          }))
+        }
       }
     } catch (_) {}
+  }
+
+  private filterManagedHeaders(headers: Record<string, unknown>): Record<string, string> {
+    const result: Record<string, string> = {}
+    for (const [key, value] of Object.entries(headers)) {
+      const lowerKey = key.toLowerCase()
+      if (
+        this.config.managedResponseHeaders.includes(lowerKey) &&
+        typeof value === 'string' &&
+        !/authorization|token|cookie|secret|password|refresh/i.test(lowerKey)
+      ) {
+        result[lowerKey] = value
+      }
+    }
+    return result
   }
 
   /**
    * 展示全局加载态（优先 Capacitor 插件，回退 DOM 节点）。
    */
   private showLoadingState(): void {
-    if (typeof window !== 'undefined') {
-      const cap = (window as any).Capacitor
-      if (cap?.Plugins?.Loading) {
-        cap.Plugins.Loading.show({ message: '处理中...' })
-      } else {
-        const el = document.getElementById('loading')
-        if (el) el.style.display = 'block'
-      }
-    }
+    this.activeLoadingRequests += 1
+    if (this.activeLoadingRequests === 1) void this.loadingPort.show?.()
   }
 
   /**
    * 隐藏全局加载态（优先 Capacitor 插件，回退 DOM 节点）。
    */
   private hideLoadingState(): void {
-    if (typeof window !== 'undefined') {
-      const cap = (window as any).Capacitor
-      if (cap?.Plugins?.Loading) {
-        cap.Plugins.Loading.hide()
-      } else {
-        const el = document.getElementById('loading')
-        if (el) el.style.display = 'none'
-      }
-    }
+    this.activeLoadingRequests = Math.max(0, this.activeLoadingRequests - 1)
+    if (this.activeLoadingRequests === 0) void this.loadingPort.hide?.()
   }
 
   /**
@@ -863,14 +1144,7 @@ export abstract class AbstractService {
    * @param message 待展示的错误文案
    */
   private showErrorMessage(message: string): void {
-    if (typeof window !== 'undefined') {
-      const cap = (window as any).Capacitor
-      if (cap?.Plugins?.Toast) {
-        cap.Plugins.Toast.show({ text: message, duration: 'short', position: 'center' })
-      } else {
-        alert(message)
-      }
-    }
+    void this.notificationPort.error?.(message)
   }
 
   /**
@@ -878,22 +1152,20 @@ export abstract class AbstractService {
    */
   updateConfig(newConfig: Partial<HttpClientConfig>): void {
     // 仅覆盖显式传入字段，避免用 undefined 污染现有配置
-    Object.keys(newConfig).forEach((key) => {
-      const value = (newConfig as any)[key]
+    Object.entries(newConfig).forEach(([key, value]) => {
       if (value !== undefined) {
-        ;(this.config as any)[key] = value
+        const configKey = key as keyof typeof this.config
+        if (configKey !== 'clientId' && configKey in this.config) {
+          ;(this.config[configKey] as unknown) = value
+        }
       }
     })
     // 变更防重复窗口时同步模块内部阈值
     if (newConfig.duplicateSubmitTimeWindow != null) {
       this.duplicateModule.updateTimeWindow(newConfig.duplicateSubmitTimeWindow)
     }
-    // 变更 baseUrl 时同步到 Url 动态地址
-    if (newConfig.baseUrl != null) {
-      Url.dynamicUrl = newConfig.baseUrl
-    }
     // 变更密钥配置时刷新缓存后的 HMAC 密钥
-    if (newConfig.hardwareFingerprintHmacSecret != null) {
+    if ('hardwareFingerprintHmacSecret' in newConfig) {
       this.setHardwareFingerprintHmacSecret(newConfig.hardwareFingerprintHmacSecret)
     }
   }
@@ -912,7 +1184,16 @@ export abstract class AbstractService {
    */
   async initializeEncryption(): Promise<void> {
     // 允许业务在首个加密请求前主动完成握手，降低首包延迟
-    await this.eccModule.exchangeKeys(this.config.baseUrl, this.clientId)
+    await this.ensureHandshake()
+  }
+
+  private translateText(key: string, fallback: string): string {
+    try {
+      const translated = this.translate?.instant(key)
+      return translated || fallback
+    } catch (_) {
+      return fallback
+    }
   }
 
   /**

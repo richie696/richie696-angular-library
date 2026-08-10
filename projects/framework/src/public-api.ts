@@ -13,6 +13,9 @@ export * from './lib/pipes/date.format.pipe';
 export * from './lib/abstract.prompt';
 export * from './lib/abstract.component';
 export * from './lib/abstract.service';
+export * from './lib/types/gateway-client.types';
+export * from './lib/errors/app-error';
+export * from './lib/stream/sse.parser';
 export * from './lib/abstract.enums';
 export * from './lib/local.storage';
 export * from './lib/url';
@@ -94,7 +97,7 @@ export interface I18nDict {
  * };
  * ```
  */
-export interface ApiResult<T = any> {
+export interface ApiResult<T = unknown> {
   /** 操作结果 */
   success: boolean;
   /** 结果数据 */

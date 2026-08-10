@@ -1,6 +1,6 @@
 {
   "name": "@richie696/angular-framework-ionic",
-  "version": "22.0.0",
+  "version": "22.1.0",
   "description": "Ionic adapter package for @richie696/angular-framework",
   "keywords": [
     "@richie696/angular-framework-ionic",
@@ -11,9 +11,12 @@
   "author": "richie696",
   "license": "MIT",
   "peerDependencies": {
-    "@angular/common": ">=22.0.0 <23.0.0",
-    "@angular/core": ">=22.0.0 <23.0.0",
-    "@ionic/angular": "*",
+    "@angular/common": ">=22.1.1 <23.0.0",
+    "@angular/core": ">=22.1.1 <23.0.0",
+    "@ionic/angular": ">=8.8.0 <9.0.0",
+    "@richie696/angular-framework": ">=22.0.0 <23.0.0"
+  },
+  "devDependencies": {
     "@richie696/angular-framework": "workspace:*"
   },
   "sideEffects": false

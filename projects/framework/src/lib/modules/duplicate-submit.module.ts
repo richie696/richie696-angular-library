@@ -23,12 +23,12 @@ export class DuplicateSubmitModule {
    * @param body 请求体
    * @param userId 用户 ID（用于同接口多用户隔离）
    */
-  generateRequestId(url: string, method: string, body: any, userId: string | null): string {
+  generateRequestId(url: string, method: string, body: unknown, userId: string | null): string {
     // 将时间戳归一到窗口粒度，保证同窗口内相同请求命中同一 ID
     const data = {
       url,
       method,
-      body: body ? JSON.stringify(body) : '',
+      body: body == null ? '' : stableSerialize(body),
       userId: userId || '',
       timestamp: Math.floor(Date.now() / this.timeWindow) * this.timeWindow
     }
@@ -93,5 +93,29 @@ export class DuplicateSubmitModule {
    */
   updateTimeWindow(timeWindow: number): void {
     this.timeWindow = timeWindow
+  }
+}
+
+/**
+ * 生成跨调用方稳定的 body 表示：对象 key 排序，数组保持顺序，循环引用明确失败。
+ * 这只用于前端本地去重，不是安全 hash，也不能替代 Gateway 的幂等键校验。
+ */
+function stableSerialize(value: unknown, seen = new WeakSet<object>()): string {
+  if (value === null || typeof value !== 'object') return JSON.stringify(value)
+  if (seen.has(value)) throw new TypeError('Cannot serialize circular request body')
+  seen.add(value)
+  try {
+    if (Array.isArray(value)) {
+      return `[${value.map((item) => stableSerialize(item, seen)).join(',')}]`
+    }
+    if (value instanceof Date) return JSON.stringify(value.toISOString())
+    if (typeof FormData !== 'undefined' && value instanceof FormData) return '[FormData]'
+    const record = value as Record<string, unknown>
+    return `{${Object.keys(record)
+      .sort()
+      .map((key) => `${JSON.stringify(key)}:${stableSerialize(record[key], seen)}`)
+      .join(',')}}`
+  } finally {
+    seen.delete(value)
   }
 }

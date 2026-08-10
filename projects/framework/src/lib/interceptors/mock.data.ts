@@ -30,7 +30,8 @@ export const MOCK_DATA_TOKEN = new InjectionToken<MockData>('MockData')
  */
 export const provideMock = (config?: Partial<MockData>): Array<Provider | EnvironmentProviders> => {
   const mockConfig: MockData = {
-    enable: config?.enable ?? true,
+    // Mock 必须显式 opt-in，生产环境不能因遗漏配置而替换全局 fetch。
+    enable: config?.enable ?? false,
     apiPrefix: config?.apiPrefix ?? '/api',
     mockDataDir: config?.mockDataDir ?? DEFAULT_MOCK_DATA_DIR
   }

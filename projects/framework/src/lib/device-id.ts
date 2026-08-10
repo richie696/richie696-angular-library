@@ -3,12 +3,12 @@ import { sha256 as jsSha256 } from 'js-sha256';
 /**
  * 浏览器设备ID生成工具
  * <p>
- * 提供可靠的浏览器设备识别方案，结合浏览器指纹和本地存储，确保设备ID的稳定性和唯一性。
+ * 提供随机设备 ID 并结合本地存储保持会话稳定性；硬件指纹是独立的可选风控信号。
  * <p>
  * 实现策略：
  * <ol>
  *   <li>优先从 LocalStorage 读取已存储的设备ID（最稳定）</li>
- *   <li>如果不存在，生成浏览器指纹（基于多种浏览器特征）</li>
+ *   <li>如果不存在，生成随机 UUID（不把硬件指纹当作设备凭据）</li>
  *   <li>将生成的设备ID保存到 LocalStorage（持久化）</li>
  *   <li>如果 LocalStorage 不可用（隐私模式），降级到 SessionStorage</li>
  * </ol>
@@ -52,7 +52,7 @@ const DEVICE_ID_SESSION_KEY = 'rydeen_device_id_session';
  *   <li>返回设备ID</li>
  * </ol>
  *
- * @returns Promise<string> 设备ID（SHA-256哈希，64字符）
+ * @returns Promise<string> 随机设备 ID
  *
  * @example
  * ```typescript
@@ -64,7 +64,7 @@ export async function getOrCreateDeviceId(): Promise<string> {
     // 1. 尝试从 LocalStorage 读取
     try {
         const storedId = localStorage.getItem(DEVICE_ID_STORAGE_KEY);
-        if (storedId && storedId.length === 64) {
+        if (storedId) {
             return storedId;
         }
     } catch (e) {
@@ -75,15 +75,17 @@ export async function getOrCreateDeviceId(): Promise<string> {
     // 2. 尝试从 SessionStorage 读取（隐私模式降级）
     try {
         const sessionId = sessionStorage.getItem(DEVICE_ID_SESSION_KEY);
-        if (sessionId && sessionId.length === 64) {
+        if (sessionId) {
             return sessionId;
         }
     } catch (e) {
         console.warn('[DeviceId] SessionStorage 也不可用', e);
     }
 
-    // 3. 生成新的设备ID（浏览器指纹）
-    const deviceId = await generateBrowserFingerprint();
+    // 3. 生成随机设备ID；硬件指纹仅由 AbstractService 的显式配置单独发送。
+    const deviceId = typeof globalThis.crypto?.randomUUID === 'function'
+        ? globalThis.crypto.randomUUID()
+        : jsSha256(`${Date.now()}-${Math.random()}-${Math.random()}`);
 
     // 4. 尝试保存到 LocalStorage
     try {

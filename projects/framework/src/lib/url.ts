@@ -64,26 +64,28 @@ export class Url extends Enum<Url> {
    * - LOCATION/NAVIGATOR 保持原值
    * @param args 路径参数数组（用于 `{}` 替换）
    */
-  value(args?: any[]): string {
+  value(args?: unknown[], baseUrlOverride?: string): string {
+    const baseUrl = baseUrlOverride ?? Url.dynamicUrl
     switch (this._method) {
       case Method.POST:
       case Method.PUT:
       case Method.DELETE:
-        console.debug('url = ', Url.dynamicUrl + this._value)
-        return Url.dynamicUrl + this._value
+      case Method.PATCH:
+        console.debug('url = ', baseUrl + this._value)
+        return baseUrl + this._value
       case Method.GET:
         // GET 场景支持按顺序替换路径中的 {}
         if (this._value.includes('{}') && args && args.length > 0) {
           let url = this._value
           if (args && args.length > 0) {
             let index = 0
-            url = url.replace(/\{}/g, () => (args && args.length > index ? args[index++] : ''))
+            url = url.replace(/\{}/g, () => (args && args.length > index ? String(args[index++]) : ''))
           }
-          console.debug('url =', Url.dynamicUrl + url)
-          return Url.dynamicUrl + url
+          console.debug('url =', baseUrl + url)
+          return baseUrl + url
         }
-        console.debug('url =', Url.dynamicUrl + this._value)
-        return Url.dynamicUrl + this._value
+        console.debug('url =', baseUrl + this._value)
+        return baseUrl + this._value
       case Method.LOCATION:
       default:
         // 本地路由或 mock 场景不拼接网关前缀

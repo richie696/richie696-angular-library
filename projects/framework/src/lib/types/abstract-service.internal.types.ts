@@ -13,7 +13,7 @@ export interface RequestInfo {
  */
 export interface RequestOptions {
   /** 请求体（GET 时通常为空） */
-  body?: any
+  body?: unknown
   /** 额外请求头 */
   headers?: Record<string, string>
   /** 指定请求唯一标识（用于防重复提交） */
@@ -21,5 +21,7 @@ export interface RequestOptions {
   /** 是否允许在特定场景下自动重试 */
   allowRetry?: boolean
   /** 路径参数数组，用于 URL 模板替换 */
-  pathParams?: any[]
+  pathParams?: unknown[]
+  /** 显式幂等键；提供后允许安全重试写请求。 */
+  idempotencyKey?: string
 }

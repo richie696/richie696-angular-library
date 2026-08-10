@@ -21,4 +21,15 @@ minimumReleaseAge: 1440
 minimumReleaseAgeStrict: true
 minimumReleaseAgeExclude:
   # 自家包 @richie696/capacitor-preferences，可信源（cnb.cool）
-  - '@richie696/capacitor-preferences@8.0.0'
+  - '@richie696/capacitor-preferences@1.0.1'
+
+# 该私有包的 CNB tarball 元数据无法被 pnpm 11 从公开 registry 复核；
+# 只对已人工核验来源和 integrity 的单个包放行，不能扩大到整个 registry。
+trustPolicyExclude:
+  - '@richie696/capacitor-preferences@1.0.1'
+
+# Angular CLI 22.1.3 当前组合中 prompt adapter 声明了精确的 listr2 10.2.1，
+# 而 CLI 实际安装 10.2.2；该规则仅记录已审查的兼容上限，避免把上游工具链告警误判成项目 peer 冲突。
+peerDependencyRules:
+  allowedVersions:
+    listr2: 10.2.2
