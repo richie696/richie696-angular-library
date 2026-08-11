@@ -198,7 +198,7 @@ Ionic 8：
 - AS 前端：冻结安装、peer 检查、`tsc --noEmit`、Angular development build 通过；真实浏览器完成登录、Dashboard、OAuth Clients、System Settings、Sessions、Audit、MFA 路由冒烟，修复后的页面无 Angular 运行时错误。
 - AS 后端：`mvn -q test` 通过（OAuth 协议集成测试 6 项通过；mTLS 测试在未提供证书 fixture 时按设计跳过 1 项）。
 - Gateway：`mvn -q test` 通过；ECC 共享密钥缓存按 `clientId + gatewayKeyFingerprint` 隔离，并有回归测试覆盖旧 key 兼容清理和 key rotation 场景。
-- 当前环境未安装 ChromeHeadless，因此库自身 Karma 浏览器单测未执行；已由严格编译、Angular 22 消费 fixture 和 AS 真实浏览器 E2E 覆盖同等关键路径。`js-sha256` 仅产生 CommonJS 优化提示，不影响构建或运行。
+- 当前环境未安装 ChromeHeadless，因此库自身 Karma 浏览器单测未执行；已由严格编译、Angular 22 消费 fixture 和 AS 真实浏览器 E2E 覆盖同等关键路径。22.1.1 已将 `js-sha256` 替换为 ESM-only 的 `@noble/hashes`，避免 CommonJS 优化提示，同时保留非安全上下文的 SHA-256/HMAC 降级能力。
 
 ## 6. 版本升级功能与改进 Todo
 

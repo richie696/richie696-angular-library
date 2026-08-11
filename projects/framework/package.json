@@ -1,6 +1,6 @@
 {
   "name": "@richie696/angular-framework",
-  "version": "22.1.0",
+  "version": "22.1.1",
   "description": "Rydeen's Angular Framework",
   "keywords": [
     "@richie696/angular-framework",
@@ -11,14 +11,14 @@
   "author": "richie696",
   "license": "MIT",
   "dependencies": {
-    "js-sha256": "^0.11.1"
+    "@noble/hashes": "2.2.0"
   },
   "peerDependencies": {
     "@angular/common": ">=22.1.1 <23.0.0",
     "@angular/core": ">=22.1.1 <23.0.0",
-    "@richie696/capacitor-preferences": ">=1.0.0 <2.0.0",
     "@ngx-translate/core": ">=18.0.0 <19.0.0",
-    "@ngx-translate/http-loader": ">=18.0.0 <19.0.0"
+    "@ngx-translate/http-loader": ">=18.0.0 <19.0.0",
+    "@richie696/capacitor-preferences": ">=1.0.0 <2.0.0"
   },
   "sideEffects": false
 }

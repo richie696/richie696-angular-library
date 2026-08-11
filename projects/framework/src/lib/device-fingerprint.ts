@@ -1,4 +1,4 @@
-import { sha256 as jsSha256 } from 'js-sha256';
+import { hmacSha256, sha256Hex } from './crypto/hash';
 
 /**
  * 动态设备指纹生成工具（增强安全版）
@@ -239,14 +239,14 @@ export async function signHardwareFingerprint(
             const signatureBase64 = btoa(String.fromCharCode(...signatureArray));
             return `${json}.${signatureBase64}`;
         } catch (e) {
-            console.warn('[DeviceFingerprint] crypto.subtle 签名失败，使用 js-sha256 降级', e);
+            console.warn('[DeviceFingerprint] crypto.subtle 签名失败，使用 ESM HMAC-SHA256 降级', e);
         }
     } else {
-        console.warn('[DeviceFingerprint] crypto.subtle 不可用（非安全上下文），使用 js-sha256 降级');
+        console.warn('[DeviceFingerprint] crypto.subtle 不可用（非安全上下文），使用 ESM HMAC-SHA256 降级');
     }
 
-    // 降级：非安全上下文时使用 js-sha256 的 HMAC-SHA256
-    const signatureArray = jsSha256.hmac.array(secretKey, json);
+    // 降级：非安全上下文时使用 ESM HMAC-SHA256。
+    const signatureArray = hmacSha256(secretKey, json);
     const signatureBase64 = btoa(String.fromCharCode(...signatureArray));
     return `${json}.${signatureBase64}`;
 }
@@ -383,7 +383,7 @@ export function calculateFingerprintSimilarity(
 /**
  * SHA-256 哈希计算
  * <p>
- * 优先使用 Web Crypto API；在非安全上下文（如内网 IP HTTP）时使用 js-sha256 降级。
+ * 优先使用 Web Crypto API；在非安全上下文（如内网 IP HTTP）时使用 ESM 哈希实现降级。
  *
  * @param text 要哈希的文本
  * @returns Promise<string> SHA-256 哈希值（64字符十六进制字符串）
@@ -398,10 +398,10 @@ async function sha256(text: string): Promise<string> {
             const hashArray = Array.from(new Uint8Array(hashBuffer));
             return hashArray.map(b => b.toString(16).padStart(2, '0')).join('');
         } catch (e) {
-            console.warn('[DeviceFingerprint] crypto.subtle.digest 不可用，使用 js-sha256 降级', e);
+            console.warn('[DeviceFingerprint] crypto.subtle.digest 不可用，使用 ESM SHA-256 降级', e);
         }
     }
-    return jsSha256.hex(text);
+    return sha256Hex(text);
 }
 
 /**

@@ -1,4 +1,4 @@
-import { sha256 as jsSha256 } from 'js-sha256';
+import { sha256Hex } from './crypto/hash';
 
 /**
  * 浏览器设备ID生成工具
@@ -85,7 +85,7 @@ export async function getOrCreateDeviceId(): Promise<string> {
     // 3. 生成随机设备ID；硬件指纹仅由 AbstractService 的显式配置单独发送。
     const deviceId = typeof globalThis.crypto?.randomUUID === 'function'
         ? globalThis.crypto.randomUUID()
-        : jsSha256(`${Date.now()}-${Math.random()}-${Math.random()}`);
+        : sha256Hex(`${Date.now()}-${Math.random()}-${Math.random()}`);
 
     // 4. 尝试保存到 LocalStorage
     try {
@@ -203,7 +203,7 @@ async function generateBrowserFingerprint(): Promise<string> {
 /**
  * SHA-256 哈希计算
  * <p>
- * 优先使用 Web Crypto API；在非安全上下文（如内网 IP HTTP、Capacitor 等）时使用 js-sha256 降级。
+ * 优先使用 Web Crypto API；在非安全上下文（如内网 IP HTTP、Capacitor 等）时使用 ESM 哈希实现降级。
  *
  * @param text 要哈希的文本
  * @returns Promise<string> SHA-256 哈希值（64字符十六进制字符串）
@@ -218,12 +218,12 @@ async function sha256(text: string): Promise<string> {
             const hashArray = Array.from(new Uint8Array(hashBuffer));
             return hashArray.map(b => b.toString(16).padStart(2, '0')).join('');
         } catch (e) {
-            console.warn('[DeviceId] crypto.subtle.digest 不可用，使用 js-sha256 降级', e);
+            console.warn('[DeviceId] crypto.subtle.digest 不可用，使用 ESM SHA-256 降级', e);
         }
     } else {
-        console.warn('[DeviceId] crypto.subtle 不可用（非安全上下文），使用 js-sha256 降级');
+        console.warn('[DeviceId] crypto.subtle 不可用（非安全上下文），使用 ESM SHA-256 降级');
     }
-    return jsSha256.hex(text);
+    return sha256Hex(text);
 }
 
 /**
