@@ -106,6 +106,10 @@ export interface ApiResult<T = unknown> {
   code: string;
   /** 错误信息或提示信息 */
   msg: string;
+  /** 请求ID */
+  requestId: string;
+  /** 帮助URL */
+  helpUrl?: string;
   /** 国际化字典 */
   i18nDict?: I18nDict;
   /** 时间戳（毫秒） */
