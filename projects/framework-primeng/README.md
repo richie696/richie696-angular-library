@@ -13,10 +13,12 @@
 
 PrimeNG 适配包，提供 `AbstractPrimeNGComponent` 与默认 Prompt 能力实现。
 
+当前发布版本为 `1.0.0`。本包只负责 PrimeNG 适配，通用请求、URL、存储和并发能力请从 `@richie696/angular-framework` 引入。
+
 ## 安装
 
 ```bash
-npm i @richie696/angular-framework @richie696/angular-framework-primeng primeng
+pnpm add @richie696/angular-framework @richie696/angular-framework-primeng primeng
 ```
 
 ## 应用配置（推荐）
@@ -70,3 +72,5 @@ export class DemoPage extends AbstractPrimeNGComponent {
 - `providePrimeNgPrompt`
 - `PRIMENG_PROMPT_CONFIG` / `DEFAULT_PRIMENG_PROMPT_CONFIG`
 - `PrimeNgPromptConfig`
+
+需要 Angular `^22.1.1`、PrimeNG `^22.0.0`。详见 Core 包的 [能力说明](../framework/README.md)。

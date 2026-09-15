@@ -14,7 +14,7 @@ packages:
 
 # peerDependency 自动链接到 workspace 同名包
 # （3 个 UI 适配包在 peerDeps 声明 @richie696/angular-framework，否则 pnpm 会去 cnb.cool 拉但找不到）
-link-workspace-packages: true
+linkWorkspacePackages: true
 
 # 发布时效门控：发布 24h 内的包视为高风险，严格模式下未在白名单则拒绝安装
 minimumReleaseAge: 1440

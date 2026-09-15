@@ -1,24 +1,31 @@
 {
   "name": "@richie696/angular",
-  "version": "22.1.4",
+  "version": "1.0.0",
   "private": true,
+  "description": "Angular 22 foundation library monorepo with core services and optional UI adapters.",
   "author": "richie696",
   "license": "MIT",
-  "workspaces": [
-    "projects/framework",
-    "projects/framework-ionic",
-    "projects/framework-material",
-    "projects/framework-primeng"
-  ],
+  "packageManager": "pnpm@10.32.1",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/richie696/richie696-angular-library.git"
+  },
+  "bugs": { "url": "https://github.com/richie696/richie696-angular-library/issues" },
+  "homepage": "https://github.com/richie696/richie696-angular-library#readme",
+  "keywords": ["angular", "angular-library", "framework", "typescript", "rxjs", "ui-adapter"],
   "scripts": {
     "changeset:add": "changeset",
     "changeset:status": "changeset status --verbose",
-    "version:all": "changeset version && npm run toc",
+    "version:all": "changeset version && pnpm run toc",
     "toc": "markdown-toc -i \"README.md\" && markdown-toc -i \"projects/framework/README.md\" && markdown-toc -i \"projects/framework-ionic/README.md\" && markdown-toc -i \"projects/framework-material/README.md\" && markdown-toc -i \"projects/framework-primeng/README.md\"",
-    "build": "npm run toc && ng build framework",
-    "build-all": "npm run toc && ng build framework && ng build framework-ionic && ng build framework-material && ng build framework-primeng",
-    "publish:all": "npm run build-all && cd dist/framework && npm publish && cd ../framework-ionic && npm publish && cd ../framework-material && npm publish && cd ../framework-primeng && npm publish",
-    "release:all": "npm run version:all && npm run publish:all"
+    "build": "pnpm run toc && pnpm exec ng build framework",
+    "build:framework": "pnpm exec ng build framework",
+    "build:ionic": "pnpm exec ng build framework-ionic",
+    "build:material": "pnpm exec ng build framework-material",
+    "build:primeng": "pnpm exec ng build framework-primeng",
+    "build-all": "pnpm run toc && pnpm exec ng build framework && pnpm exec ng build framework-ionic && pnpm exec ng build framework-material && pnpm exec ng build framework-primeng",
+    "publish:all": "pnpm run build-all && pnpm --dir dist/framework publish --access public && pnpm --dir dist/framework-ionic publish --access public && pnpm --dir dist/framework-material publish --access public && pnpm --dir dist/framework-primeng publish --access public",
+    "release:all": "pnpm run version:all && pnpm run publish:all"
   },
   "dependencies": {
     "@angular/common": "~22.1.1",

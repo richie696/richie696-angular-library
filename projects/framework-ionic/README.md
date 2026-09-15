@@ -13,10 +13,12 @@
 
 Ionic 适配包，提供 `AbstractIonicComponent` 与默认 Prompt 能力实现。
 
+当前发布版本为 `1.0.0`。本包只负责 Ionic 适配，通用请求、URL、存储和并发能力请从 `@richie696/angular-framework` 引入。
+
 ## 安装
 
 ```bash
-npm i @richie696/angular-framework @richie696/angular-framework-ionic @ionic/angular
+pnpm add @richie696/angular-framework @richie696/angular-framework-ionic @ionic/angular
 ```
 
 ## 应用配置（推荐）
@@ -69,3 +71,5 @@ export class DemoPage extends AbstractIonicComponent {
 - `provideIonicPrompt`
 - `IONIC_PROMPT_CONFIG` / `DEFAULT_IONIC_PROMPT_CONFIG`
 - `IonicPromptConfig`
+
+需要 Angular `^22.1.1`、Ionic Angular `^8.8.0`。详见 Core 包的 [能力说明](../framework/README.md)。

@@ -1,6 +1,6 @@
 {
   "name": "@richie696/angular-framework",
-  "version": "22.1.6",
+  "version": "1.0.0",
   "description": "Rydeen's Angular Framework",
   "keywords": [
     "@richie696/angular-framework",
@@ -10,6 +10,14 @@
   ],
   "author": "richie696",
   "license": "MIT",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/richie696/richie696-angular-library.git",
+    "directory": "projects/framework"
+  },
+  "bugs": { "url": "https://github.com/richie696/richie696-angular-library/issues" },
+  "homepage": "https://github.com/richie696/richie696-angular-library/tree/master/projects/framework#readme",
+  "publishConfig": { "access": "public" },
   "dependencies": {
     "@noble/hashes": "2.2.0"
   },

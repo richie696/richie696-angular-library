@@ -13,12 +13,16 @@
 - [发布说明（建议流程）](#%E5%8F%91%E5%B8%83%E8%AF%B4%E6%98%8E%E5%BB%BA%E8%AE%AE%E6%B5%81%E7%A8%8B)
 - [文档入口](#%E6%96%87%E6%A1%A3%E5%85%A5%E5%8F%A3)
 - [设计原则](#%E8%AE%BE%E8%AE%A1%E5%8E%9F%E5%88%99)
+- [能力边界](#%E8%83%BD%E5%8A%9B%E8%BE%B9%E7%95%8C)
+- [许可证](#%E8%AE%B8%E5%8F%AF%E8%AF%81)
 
 <!-- tocstop -->
 
 ------
 
 仓库级 Angular 基础库工程，采用 monorepo 结构，包含 1 个核心包和 3 个 UI 适配包。
+
+当前所有可发布包统一为 `1.0.0`。运行要求：Node.js `>=20`、pnpm `10.x`、Angular `^22.1.1`。
 
 ## 包结构
 
@@ -59,13 +63,13 @@ dist/
 ### 1) 安装依赖
 
 ```bash
-npm install
+pnpm install
 ```
 
 ### 2) 生成文档目录（README TOC）
 
 ```bash
-npm run toc
+pnpm run toc
 ```
 
 ### 3) 构建
@@ -73,43 +77,42 @@ npm run toc
 仅构建 core：
 
 ```bash
-npm run build
+pnpm run build
 ```
 
 构建所有包：
 
 ```bash
-npm run build-all
+pnpm run build-all
 ```
 
 按包单独构建：
 
 ```bash
-npm run build:framework
-npm run build:ionic
-npm run build:material
-npm run build:primeng
+pnpm run build:framework
+pnpm run build:ionic
+pnpm run build:material
+pnpm run build:primeng
 ```
 
 ## 常用脚本
 
-- `npm run toc`：自动更新 4 个 README 的目录（`markdown-toc`）
-- `npm run build`：更新目录后构建 core 包
-- `npm run build-all`：更新目录后构建全部包
-- `npm run test`：执行测试
-- `npm run lint`：执行 lint
+- `pnpm run toc`：自动更新 4 个 README 的目录（`markdown-toc`）
+- `pnpm run build`：更新目录后构建 core 包
+- `pnpm run build:framework` / `pnpm run build:ionic` / `pnpm run build:material` / `pnpm run build:primeng`：按包构建
+- `pnpm run build-all`：更新目录后构建全部包
 
 ## 发布说明（建议流程）
 
-1. 确认 README 与 TOC 已更新（`npm run toc`）
-2. 执行全量构建验证（`npm run build-all`）
+1. 确认 README 与 TOC 已更新（`pnpm run toc`）
+2. 执行全量构建验证（`pnpm run build-all`）
 3. 进入对应 `dist/<package>` 目录发布
 
 示例（发布 core）：
 
 ```bash
 cd dist/framework
-npm publish
+pnpm publish --access public
 ```
 
 ## 文档入口
@@ -124,3 +127,13 @@ npm publish
 - Core 与 UI 适配解耦，避免主包传递 UI 依赖
 - 业务代码优先面向抽象（`AbstractComponent` / `AbstractService` / `AbstractPrompt`）
 - UI 库替换应尽量只影响适配层，不影响业务层
+
+## 能力边界
+
+- Core 的请求加密、设备标识和 HMAC 能力依赖服务端协议；浏览器端密钥不能视为真正秘密。
+- Core 的锁、栅栏和条件变量只协调同一 JavaScript 运行时中的异步任务，不提供跨标签页或跨进程同步。
+- 适配包只负责 Prompt 和 Angular 组件基类，不替宿主应用决定主题、路由或业务 API。
+
+## 许可证
+
+本项目基于 [MIT License](LICENSE) 开源。

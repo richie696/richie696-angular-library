@@ -52,6 +52,8 @@
 - 并发同步工具（锁、条件变量、栅栏等）
 - 事件与拦截器基础设施
 
+当前发布版本为 `1.0.0`。本包只提供 Angular 无 UI 绑定的 Core 能力，Ionic、Angular Material 和 PrimeNG 实现位于独立适配包。
+
 > 说明：UI 具体实现（Ionic / Material / PrimeNG）已拆分到独立适配包，core 仅保留抽象和通用能力。
 
 ---
@@ -59,7 +61,7 @@
 ## 1. 安装
 
 ```bash
-npm i @richie696/angular-framework
+pnpm add @richie696/angular-framework
 ```
 
 ---
@@ -231,21 +233,31 @@ service.requestStream<any>(appUrl, { question: '你好' }).subscribe({
 ### 6.2 `device-id` / `device-fingerprint`
 
 **作用**
-- 生成稳定设备 ID
-- 生成硬件指纹并支持签名、相似度比较
+- `AbstractService` 可按配置注入稳定设备 ID，或注入调用方提供的设备指纹 Header Provider
+- 请求链路支持设备标识的可选透传；默认关闭
+
+设备标识与指纹相关实现不是独立公开入口，业务应通过 `AbstractService` 的 `HttpClientConfig` 配置使用。设备指纹属于浏览器信号组合，不等同于不可变的真实硬件身份。
 
 **典型场景**
 - 风控、可信设备、异地登录校验、安全审计
 
-**示例**
+**配置示例**
 
 ```ts
-import { getOrCreateDeviceId } from '@richie696/angular-framework';
-import { generateHardwareFingerprint } from '@richie696/angular-framework';
+import { AbstractService } from '@richie696/angular-framework';
 
-const deviceId = await getOrCreateDeviceId();
-const fingerprint = await generateHardwareFingerprint();
+export class UserService extends AbstractService {
+  constructor() {
+    super({
+      sendHardwareFingerprint: true,
+      allowUnsignedHardwareFingerprint: false,
+      hardwareFingerprintHmacSecret: 'server-agreed-secret'
+    });
+  }
+}
 ```
+
+请勿将浏览器端 HMAC 密钥当作真正秘密；安全协议、密钥管理和重放策略必须由服务端共同定义。
 
 ---
 
@@ -614,13 +626,13 @@ Core 包负责“抽象与通用能力”，UI 具体实现在独立包：
 - 构建 core：
 
 ```bash
-ng build framework
+pnpm run build:framework
 ```
 
 - 全量构建（含 3 个 UI 子包）：
 
 ```bash
-npm run build-all
+pnpm run build-all
 ```
 
 ---

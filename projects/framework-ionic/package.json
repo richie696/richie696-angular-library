@@ -1,6 +1,6 @@
 {
   "name": "@richie696/angular-framework-ionic",
-  "version": "22.1.3",
+  "version": "1.0.0",
   "description": "Ionic adapter package for @richie696/angular-framework",
   "keywords": [
     "@richie696/angular-framework-ionic",
@@ -10,11 +10,19 @@
   ],
   "author": "richie696",
   "license": "MIT",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/richie696/richie696-angular-library.git",
+    "directory": "projects/framework-ionic"
+  },
+  "bugs": { "url": "https://github.com/richie696/richie696-angular-library/issues" },
+  "homepage": "https://github.com/richie696/richie696-angular-library/tree/master/projects/framework-ionic#readme",
+  "publishConfig": { "access": "public" },
   "peerDependencies": {
     "@angular/common": ">=22.1.1 <23.0.0",
     "@angular/core": ">=22.1.1 <23.0.0",
     "@ionic/angular": ">=8.8.0 <9.0.0",
-    "@richie696/angular-framework": ">=22.0.0 <23.0.0"
+    "@richie696/angular-framework": ">=1.0.0 <2.0.0"
   },
   "devDependencies": {
     "@richie696/angular-framework": "workspace:*"
