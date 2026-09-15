@@ -1,5 +1,14 @@
 # @richie696/angular-framework（Core）
 
+[![npm version](https://img.shields.io/npm/v/@richie696%2Fangular-framework?logo=npm&label=npm)](https://www.npmjs.com/package/@richie696/angular-framework)
+[![npm downloads](https://img.shields.io/npm/dm/@richie696%2Fangular-framework?logo=npm&label=downloads)](https://www.npmjs.com/package/@richie696/angular-framework)
+[![GitHub stars](https://img.shields.io/github/stars/richie696/richie696-angular-library?logo=github&label=stars)](https://github.com/richie696/richie696-angular-library)
+[![GitHub issues](https://img.shields.io/github/issues/richie696/richie696-angular-library?logo=github&label=issues)](https://github.com/richie696/richie696-angular-library/issues)
+[![MIT License](https://img.shields.io/github/license/richie696/richie696-angular-library?logo=opensourceinitiative&label=license)](../../LICENSE)
+
+[📚 Monorepo 文档](../../README.md) · [📦 包结构](../../README.md#包结构) · [💻 GitHub](https://github.com/richie696/richie696-angular-library) · [🐛 Issues](https://github.com/richie696/richie696-angular-library/issues) · [🤝 贡献](../../CONTRIBUTING.md) · [🛡️ 安全](../../SECURITY.md) · [📄 License](../../LICENSE)
+
+
 <!-- toc -->
 
 - [1. 安装](#1-%E5%AE%89%E8%A3%85)
