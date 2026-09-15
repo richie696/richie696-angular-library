@@ -26,6 +26,7 @@ import {
 import {RequestOptions} from './types/abstract-service.internal.types'
 import {SseParser} from './stream/sse.parser'
 import {AppError} from './errors/app-error'
+import {ManagedHeadersStore, ManagedHeadersStoreOptions} from './managed-headers.store'
 import {
   AUTH_REDIRECT_PORT,
   GATEWAY_CLIENT_CONFIG,
@@ -101,8 +102,7 @@ export abstract class AbstractService {
   private readonly loadingPort: LoadingPort
   private readonly notificationPort: NotificationPort
   private readonly authRedirectPort: AuthRedirectPort
-  private managedHeaders: Record<string, string> = {}
-  private managedHeadersExpiresAt = 0
+  private readonly managedHeadersStore: ManagedHeadersStore
   private handshakePromise: Promise<void> | null = null
   private reHandshakePromise: Promise<void> | null = null
   private activeLoadingRequests = 0
@@ -121,6 +121,7 @@ export abstract class AbstractService {
     this.loadingPort = inject(LOADING_PORT)
     this.notificationPort = inject(NOTIFICATION_PORT)
     this.authRedirectPort = inject(AUTH_REDIRECT_PORT)
+    this.managedHeadersStore = inject(ManagedHeadersStore)
     const injectedConfig = inject(GATEWAY_CLIENT_CONFIG, {optional: true}) ?? {}
     // 配置优先级：构造参数 > provider > 兼容的 Url.dynamicUrl > SSR-safe 全局运行时配置。
     const runtimeBaseUrl =
@@ -198,7 +199,8 @@ export abstract class AbstractService {
       body: pathParams == null && queryParams == null ? body : queryParams ?? (url.method !== Method.GET ? body : undefined),
       headers: header ?? undefined,
       pathParams,
-      allowRetry: true
+      allowRetry: true,
+      skipManagedHeaders: url.skipManagedHeaders
     }
 
     try {
@@ -719,7 +721,9 @@ export abstract class AbstractService {
     // 首次加密请求前自动完成密钥交换
     await this.ensureHandshake()
 
-    const cachedHeaders = this.config.enableHeaderAutoManagement ? this.loadCachedHeaders() : {}
+    const cachedHeaders = this.config.enableHeaderAutoManagement && !options.skipManagedHeaders
+      ? this.loadCachedHeaders()
+      : {}
     const deviceHeaders = await this.buildDeviceHeaders()
 
     const headers = this.mergeHeaders(
@@ -739,10 +743,12 @@ export abstract class AbstractService {
 
     let requestBody: string | null = null
     if (options.body != null && method !== Method.GET) {
-      // 按当前协议：请求体保持 JSON，同时在头里透传密文
+      // 密文必须作为请求体传输，不能同时保留明文 JSON。使用标记头让网关识别
+      // 协议版本，避免受 HTTP Header 长度限制的头像等管理端有效载荷被截断。
       const jsonData = JSON.stringify(options.body)
-      headers['X-Encrypted-Data'] = await this.eccModule.encrypt(jsonData)
-      requestBody = jsonData
+      headers['X-Encrypted-Data'] = 'body-v1'
+      headers['Content-Type'] = 'application/octet-stream'
+      requestBody = await this.eccModule.encrypt(jsonData)
     }
 
     const response = await fetch(url, {
@@ -778,7 +784,9 @@ export abstract class AbstractService {
     method: string,
     options: RequestOptions
   ): Promise<Response> {
-    const cachedHeaders = this.config.enableHeaderAutoManagement ? this.loadCachedHeaders() : {}
+    const cachedHeaders = this.config.enableHeaderAutoManagement && !options.skipManagedHeaders
+      ? this.loadCachedHeaders()
+      : {}
     const deviceHeaders = await this.buildDeviceHeaders()
 
     const headers = this.mergeHeaders(
@@ -981,12 +989,10 @@ export abstract class AbstractService {
    * 清理鉴权相关本地状态并跳转到首页。
    */
   private async clearAuthAndRedirect(): Promise<void> {
-    this.managedHeaders = {}
-    this.managedHeadersExpiresAt = 0
+    this.clearManagedHeaders()
     if (this.config.persistManagedHeaders && typeof window !== 'undefined') {
       try {
         // 仅清理框架相关鉴权键，避免误伤宿主应用其他缓存
-        localStorage.removeItem(this.config.headerStorageKey)
         const authKeys = ['userId', 'token', 'accessToken', 'refreshToken']
         authKeys.forEach((key) => {
           localStorage.removeItem(key)
@@ -1052,29 +1058,7 @@ export abstract class AbstractService {
    * 读取本地缓存的业务响应头。
    */
   private loadCachedHeaders(): Record<string, string> {
-    if (this.managedHeadersExpiresAt > 0 && this.managedHeadersExpiresAt <= Date.now()) {
-      this.managedHeaders = {}
-      this.managedHeadersExpiresAt = 0
-    }
-    if (Object.keys(this.managedHeaders).length > 0) return {...this.managedHeaders}
-    if (!this.config.persistManagedHeaders || typeof window === 'undefined') return {}
-    try {
-      const cached = localStorage.getItem(this.config.headerStorageKey)
-      if (!cached) return {}
-      const parsed: unknown = JSON.parse(cached)
-      if (!parsed || typeof parsed !== 'object') return {}
-      const stored = parsed as {headers?: Record<string, unknown>; expiresAt?: number} & Record<string, unknown>
-      const headers = stored.headers && typeof stored.headers === 'object' ? stored.headers : stored
-      const expiresAt = typeof stored.expiresAt === 'number'
-        ? stored.expiresAt
-        : Date.now() + this.config.managedHeadersTtlMs
-      if (expiresAt <= Date.now()) return {}
-      this.managedHeadersExpiresAt = expiresAt
-      this.managedHeaders = this.filterManagedHeaders(headers)
-      return {...this.managedHeaders}
-    } catch (_) {
-      return {}
-    }
+    return this.managedHeadersStore.load(this.managedHeadersStoreOptions)
   }
 
   /**
@@ -1088,22 +1072,17 @@ export abstract class AbstractService {
       response.headers.forEach((value, key) => {
         const lowerKey = key.toLowerCase()
         if (
-          this.config.managedResponseHeaders.includes(lowerKey) &&
-          !AbstractService.SYSTEM_HEADERS.has(lowerKey) &&
-          !/authorization|token|cookie|secret|password|refresh/i.test(lowerKey)
+          this.isManagedHeaderAllowed(lowerKey) &&
+          !AbstractService.SYSTEM_HEADERS.has(lowerKey)
         ) {
           businessHeaders[lowerKey] = value
         }
       })
       if (Object.keys(businessHeaders).length > 0) {
-        this.managedHeaders = this.filterManagedHeaders({...this.loadCachedHeaders(), ...businessHeaders})
-        this.managedHeadersExpiresAt = Date.now() + this.config.managedHeadersTtlMs
-        if (this.config.persistManagedHeaders && typeof window !== 'undefined') {
-          localStorage.setItem(this.config.headerStorageKey, JSON.stringify({
-            headers: this.managedHeaders,
-            expiresAt: this.managedHeadersExpiresAt
-          }))
-        }
+        this.managedHeadersStore.save(
+          this.filterManagedHeaders({...this.loadCachedHeaders(), ...businessHeaders}),
+          this.managedHeadersStoreOptions
+        )
       }
     } catch (_) {}
   }
@@ -1113,14 +1092,53 @@ export abstract class AbstractService {
     for (const [key, value] of Object.entries(headers)) {
       const lowerKey = key.toLowerCase()
       if (
-        this.config.managedResponseHeaders.includes(lowerKey) &&
+        this.isManagedHeaderAllowed(lowerKey) &&
         typeof value === 'string' &&
-        !/authorization|token|cookie|secret|password|refresh/i.test(lowerKey)
+        !AbstractService.SYSTEM_HEADERS.has(lowerKey)
       ) {
         result[lowerKey] = value
       }
     }
     return result
+  }
+
+  /**
+   * 判断响应头是否允许由框架自动托管。
+   *
+   * 默认仍拒绝 authorization/token 等敏感头；Gateway 使用的
+   * x-rd-request-apitoken 是显式配置的会话令牌头，只有在
+   * managedResponseHeaders 中明确声明时才允许进入托管缓存。
+   */
+  private isManagedHeaderAllowed(lowerKey: string): boolean {
+    if (!this.config.managedResponseHeaders.includes(lowerKey)) return false
+    if (lowerKey === 'x-rd-request-apitoken') return true
+    return !/authorization|token|cookie|secret|password|refresh/i.test(lowerKey)
+  }
+
+  /**
+   * 获取框架托管的响应头。
+   * 业务层无需读取或解析 headerStorageKey 对应的 Web Storage。
+   */
+  getManagedHeader(name: string): string | null {
+    const target = name.toLowerCase()
+    return Object.entries(this.loadCachedHeaders()).find(([key, value]) =>
+      key.toLowerCase() === target && value.trim().length > 0
+    )?.[1] ?? null
+  }
+
+  /**
+   * 清理框架托管的响应头缓存（例如显式退出登录）。
+   */
+  clearManagedHeaders(): void {
+    this.managedHeadersStore.clear(this.managedHeadersStoreOptions)
+  }
+
+  private get managedHeadersStoreOptions(): ManagedHeadersStoreOptions {
+    return {
+      persist: this.config.persistManagedHeaders,
+      storageKey: this.config.headerStorageKey,
+      ttlMs: this.config.managedHeadersTtlMs
+    }
   }
 
   /**

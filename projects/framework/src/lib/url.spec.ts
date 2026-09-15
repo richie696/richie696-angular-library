@@ -38,12 +38,14 @@ describe('Url', () => {
     const legacy = new Url('legacy', '/legacy', Method.POST, true, true)
     const options = new Url('options', '/options', Method.POST, {
       needEncryption: true,
-      needDuplicateCheck: true
+      needDuplicateCheck: true,
+      skipManagedHeaders: true
     })
 
     expect(legacy.needEncryption).toBeTrue()
     expect(legacy.needDuplicateCheck).toBeTrue()
     expect(options.needEncryption).toBeTrue()
     expect(options.needDuplicateCheck).toBeTrue()
+    expect(options.skipManagedHeaders).toBeTrue()
   })
 })

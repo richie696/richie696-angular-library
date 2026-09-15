@@ -13,6 +13,7 @@ export * from './lib/pipes/date.format.pipe';
 export * from './lib/abstract.prompt';
 export * from './lib/abstract.component';
 export * from './lib/abstract.service';
+export * from './lib/managed-headers.store';
 export * from './lib/types/gateway-client.types';
 export * from './lib/errors/app-error';
 export * from './lib/stream/sse.parser';

@@ -9,6 +9,13 @@ export interface UrlOptions {
   needEncryption?: boolean;
   /** 是否需要防重复提交检查（默认false） */
   needDuplicateCheck?: boolean;
+  /**
+   * 是否跳过框架托管的业务请求头（默认 false）。
+   *
+   * 适用于登录、注册、找回密码等匿名入口，防止上一会话缓存的访问令牌
+   * 被误带入新的身份认证流程。
+   */
+  skipManagedHeaders?: boolean;
 }
 
 /**
@@ -19,6 +26,7 @@ export class Url extends Enum<Url> {
   static dynamicUrl: string = ''
   private readonly _needEncryption: boolean;
   private readonly _needDuplicateCheck: boolean;
+  private readonly _skipManagedHeaders: boolean;
 
   constructor(
     _objectName: string,
@@ -34,10 +42,12 @@ export class Url extends Enum<Url> {
       // 新写法：使用配置对象
       this._needEncryption = needEncryptionOrOptions.needEncryption || false;
       this._needDuplicateCheck = needEncryptionOrOptions.needDuplicateCheck || false;
+      this._skipManagedHeaders = needEncryptionOrOptions.skipManagedHeaders || false;
     } else {
       // 兼容旧写法：使用简化布尔参数
       this._needEncryption = needEncryptionOrOptions || false;
       this._needDuplicateCheck = needDuplicateCheck || false;
+      this._skipManagedHeaders = false;
     }
   }
 
@@ -113,5 +123,10 @@ export class Url extends Enum<Url> {
    */
   public get needDuplicateCheck(): boolean {
     return this._needDuplicateCheck;
+  }
+
+  /** 是否跳过框架托管的业务请求头。 */
+  public get skipManagedHeaders(): boolean {
+    return this._skipManagedHeaders;
   }
 }

@@ -24,4 +24,6 @@ export interface RequestOptions {
   pathParams?: unknown[]
   /** 显式幂等键；提供后允许安全重试写请求。 */
   idempotencyKey?: string
+  /** 是否跳过框架托管的业务请求头（登录等匿名入口使用）。 */
+  skipManagedHeaders?: boolean
 }
