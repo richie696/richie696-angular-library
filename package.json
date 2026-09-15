@@ -1,6 +1,6 @@
 {
   "name": "@richie696/angular",
-  "version": "1.0.0",
+  "version": "1.0.1",
   "private": true,
   "description": "Angular 22 foundation library monorepo with core services and optional UI adapters.",
   "author": "richie696",
@@ -24,7 +24,8 @@
     "build:material": "pnpm exec ng build framework-material",
     "build:primeng": "pnpm exec ng build framework-primeng",
     "build-all": "pnpm run toc && pnpm exec ng build framework && pnpm exec ng build framework-ionic && pnpm exec ng build framework-material && pnpm exec ng build framework-primeng",
-    "publish:all": "pnpm run build-all && pnpm --dir dist/framework publish --access public && pnpm --dir dist/framework-ionic publish --access public && pnpm --dir dist/framework-material publish --access public && pnpm --dir dist/framework-primeng publish --access public",
+    "publish:all": "pnpm run publish:selected -- all",
+    "publish:selected": "node scripts/publish-selected.js",
     "release:all": "pnpm run version:all && pnpm run publish:all"
   },
   "dependencies": {

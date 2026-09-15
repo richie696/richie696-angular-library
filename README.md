@@ -1,28 +1,34 @@
-# Rydeen Angular Library
+# @richie696/angular-framework
 
-<!-- toc -->
+[![npm version](https://img.shields.io/npm/v/%40richie696%2Fangular-framework?logo=npm&label=npm)](https://www.npmjs.com/package/@richie696/angular-framework)
+[![npm downloads](https://img.shields.io/npm/dm/%40richie696%2Fangular-framework?logo=npm&label=downloads)](https://www.npmjs.com/package/@richie696/angular-framework)
+[![GitHub stars](https://img.shields.io/github/stars/richie696/richie696-angular-library?logo=github&label=stars)](https://github.com/richie696/richie696-angular-library)
+[![GitHub issues](https://img.shields.io/github/issues/richie696/richie696-angular-library?logo=github&label=issues)](https://github.com/richie696/richie696-angular-library/issues)
+[![MIT License](https://img.shields.io/github/license/richie696/richie696-angular-library?logo=opensourceinitiative&label=license)](LICENSE)
 
-- [包结构](#%E5%8C%85%E7%BB%93%E6%9E%84)
-- [目录说明](#%E7%9B%AE%E5%BD%95%E8%AF%B4%E6%98%8E)
-- [何时使用哪个包](#%E4%BD%95%E6%97%B6%E4%BD%BF%E7%94%A8%E5%93%AA%E4%B8%AA%E5%8C%85)
-- [快速开始](#%E5%BF%AB%E9%80%9F%E5%BC%80%E5%A7%8B)
-  * [1) 安装依赖](#1-%E5%AE%89%E8%A3%85%E4%BE%9D%E8%B5%96)
-  * [2) 生成文档目录（README TOC）](#2-%E7%94%9F%E6%88%90%E6%96%87%E6%A1%A3%E7%9B%AE%E5%BD%95readme-toc)
-  * [3) 构建](#3-%E6%9E%84%E5%BB%BA)
-- [常用脚本](#%E5%B8%B8%E7%94%A8%E8%84%9A%E6%9C%AC)
-- [发布说明（建议流程）](#%E5%8F%91%E5%B8%83%E8%AF%B4%E6%98%8E%E5%BB%BA%E8%AE%AE%E6%B5%81%E7%A8%8B)
-- [文档入口](#%E6%96%87%E6%A1%A3%E5%85%A5%E5%8F%A3)
-- [设计原则](#%E8%AE%BE%E8%AE%A1%E5%8E%9F%E5%88%99)
-- [能力边界](#%E8%83%BD%E5%8A%9B%E8%BE%B9%E7%95%8C)
-- [许可证](#%E8%AE%B8%E5%8F%AF%E8%AF%81)
+[📦 Core npm](https://www.npmjs.com/package/@richie696/angular-framework) · [💻 GitHub](https://github.com/richie696/richie696-angular-library) · [📚 文档](projects/framework/README.md) · [🐛 Issues](https://github.com/richie696/richie696-angular-library/issues) · [🤝 贡献](CONTRIBUTING.md) · [🛡️ 安全](SECURITY.md) · [📄 License](LICENSE)
 
-<!-- tocstop -->
 
 ------
 
 仓库级 Angular 基础库工程，采用 monorepo 结构，包含 1 个核心包和 3 个 UI 适配包。
 
 当前所有可发布包统一为 `1.0.0`。运行要求：Node.js `>=20`、pnpm `10.x`、Angular `^22.1.1`。
+
+## 架构定位
+
+Core 只负责业务无关的基础能力；Ionic、Angular Material 和 PrimeNG 只负责各自 UI 生态的组件基类与 Prompt 实现。业务页面面向 `AbstractComponent`、`AbstractService` 和 `AbstractPrompt` 编程，替换 UI 适配包时无需改动业务请求和页面逻辑。
+
+## 能力总览（Public API）
+
+| 能力模块 | 主要内容 | 适用场景 |
+| --- | --- | --- |
+| 页面与提示抽象 | `AbstractComponent`、`AbstractPrompt` | 统一页面基类、导航和提示调用 |
+| 请求与流式传输 | `AbstractService`、SSE、拦截器、超时、重试 | 统一 API 调用和服务端流式响应 |
+| 协议与数据模型 | `Url`、`Method`、`ApiResult`、`Page` | 统一接口地址、方法和响应结构 |
+| 安全与设备 | ECC/AES、HMAC、设备 ID、请求头管理 | 加密接口、风控和可信设备 |
+| 并发同步 | `ReentrantLock`、`ReadWriteLock`、`StampedLock`、`Condition` 等 | 防重复提交和异步任务协调 |
+| 事件与 Mock | `EventManager`、`MockInterceptor`、`installMockFetch` | 跨模块通信与联调阶段 Mock |
 
 ## 包结构
 
@@ -34,6 +40,28 @@
   - Angular Material 提示能力默认实现（`AbstractMaterialComponent` + Prompt Adapter）
 - `@richie696/angular-framework-primeng`
   - PrimeNG 提示能力默认实现（`AbstractPrimeNGComponent` + Prompt Adapter）
+
+## 组件与模块职责
+
+### Core：`@richie696/angular-framework`
+
+- `AbstractPrompt`：定义 `info/error/warn/success/confirm` 统一提示契约，业务不直接依赖具体 UI 组件。
+- `AbstractComponent`：提供页面级公共能力，包括路由参数读取、导航和统一提示调用；业务页面继承它编写领域逻辑。
+- `AbstractService`：统一封装 HTTP、SSE、超时、错误处理、请求加密、防重复提交、托管请求头和设备标识。
+- `Url`、`Method`、`ApiResult`、`Page`：约束接口地址、请求方法、响应信封和分页模型，减少字符串与响应结构散落。
+- `LocalStorage`、`ManagedHeadersStore`：统一浏览器存储、Capacitor Preferences 和服务端托管请求头的访问与持久化。
+- `EventManager`、`EventNameEnum`：提供轻量事件发布订阅，用于登录态、列表刷新和跨模块通知。
+- `ReentrantLock`、`ReadWriteLock`、`StampedLock`、`Condition`、`CountDownLatch`、`CyclicBarrier`、`synchronizedFunc`：协调同一 JavaScript 运行时内的异步竞争。
+- `MockInterceptor`、`installMockFetch`、`resolveMockAssetUrl`：为 `HttpClient` 与 Angular `HttpClient` 提供可控的本地 Mock 拦截。
+- `SseParser`、`DateFormatPipe`：分别处理 SSE 数据帧解析和日期展示格式化。
+
+### UI 适配包
+
+- `@richie696/angular-framework-ionic`：提供 `AbstractIonicComponent`、`IonicPromptAdapter` 和 `provideIonicPrompt`，接入 Ionic Toast/Alert。
+- `@richie696/angular-framework-material`：提供 `AbstractMaterialComponent`、`MaterialPromptAdapter` 和 `provideMaterialPrompt`，接入 Angular Material SnackBar/Dialog。
+- `@richie696/angular-framework-primeng`：提供 `AbstractPrimeNGComponent`、`PrimeNgPromptAdapter` 和 `providePrimeNgPrompt`，接入 PrimeNG Message/ConfirmDialog。
+
+适配包只替换 Prompt 和页面基类实现，不改变 Core 的请求、协议、存储和并发 API。各适配包的详细安装和配置见对应 [Ionic 文档](projects/framework-ionic/README.md)、[Material 文档](projects/framework-material/README.md) 和 [PrimeNG 文档](projects/framework-primeng/README.md)。
 
 ## 目录说明
 
@@ -102,25 +130,68 @@ pnpm run build:primeng
 - `pnpm run build:framework` / `pnpm run build:ionic` / `pnpm run build:material` / `pnpm run build:primeng`：按包构建
 - `pnpm run build-all`：更新目录后构建全部包
 
+## 典型接入示例
+
+以 Material 为例，业务项目只需要安装 Core 和 Material 适配包，在 `app.config.ts` 注册 Prompt Provider：
+
+```ts
+import { ApplicationConfig } from '@angular/core';
+import { provideMaterialPrompt } from '@richie696/angular-framework-material';
+
+export const appConfig: ApplicationConfig = {
+  providers: [
+    ...provideMaterialPrompt({
+      snackDuration: 2500,
+      confirmOkI18nKey: 'app.common.confirm',
+    }),
+  ],
+};
+```
+
+页面继承适配包的组件基类即可直接使用统一提示能力：
+
+```ts
+import { Component } from '@angular/core';
+import { AbstractMaterialComponent } from '@richie696/angular-framework-material';
+
+@Component({
+  selector: 'app-user-page',
+  template: `<button mat-raised-button (click)="save()">保存</button>`,
+})
+export class UserPage extends AbstractMaterialComponent {
+  async save(): Promise<void> {
+    await this.success('保存成功');
+  }
+}
+```
+
 ## 发布说明（建议流程）
 
 1. 确认 README 与 TOC 已更新（`pnpm run toc`）
-2. 执行全量构建验证（`pnpm run build-all`）
-3. 进入对应 `dist/<package>` 目录发布
-
-示例（发布 core）：
+2. 确认 npm 登录状态：`npm whoami --registry=https://registry.npmjs.org/`
+3. 执行统一构建与发布脚本：
 
 ```bash
-cd dist/framework
-pnpm publish --access public
+pnpm run publish:selected -- all
 ```
+
+也可以按项目目录名或 npm 包名选择性发布：
+
+```bash
+pnpm run publish:selected -- framework framework-ionic
+pnpm run publish:selected -- @richie696/angular-framework-primeng
+```
+
+脚本会先更新目录、构建选中的 Angular 包，再从 `dist/<package>` 逐个发布到 npm 官方 registry，并固定使用 `public` access。已发布版本不能重复覆盖，需要先更新版本号。
 
 ## 文档入口
 
-- Core 包文档：`projects/framework/README.md`
-- Ionic 适配包文档：`projects/framework-ionic/README.md`
-- Material 适配包文档：`projects/framework-material/README.md`
-- PrimeNG 适配包文档：`projects/framework-primeng/README.md`
+### npm 包与独立文档
+
+- [Core：`@richie696/angular-framework`](https://www.npmjs.com/package/@richie696/angular-framework) · [README](projects/framework/README.md)
+- [Ionic：`@richie696/angular-framework-ionic`](https://www.npmjs.com/package/@richie696/angular-framework-ionic) · [README](projects/framework-ionic/README.md)
+- [Material：`@richie696/angular-framework-material`](https://www.npmjs.com/package/@richie696/angular-framework-material) · [README](projects/framework-material/README.md)
+- [PrimeNG：`@richie696/angular-framework-primeng`](https://www.npmjs.com/package/@richie696/angular-framework-primeng) · [README](projects/framework-primeng/README.md)
 
 ## 设计原则
 
