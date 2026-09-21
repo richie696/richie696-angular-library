@@ -8,7 +8,6 @@
 
 [📚 Monorepo 文档](../../README.md) · [📦 包结构](../../README.md#包结构) · [💻 GitHub](https://github.com/richie696/richie696-angular-library) · [🐛 Issues](https://github.com/richie696/richie696-angular-library/issues) · [🤝 贡献](../../CONTRIBUTING.md) · [🛡️ 安全](../../SECURITY.md) · [📄 License](../../LICENSE)
 
-
 <!-- toc -->
 
 - [安装](#%E5%AE%89%E8%A3%85)
@@ -22,7 +21,7 @@
 
 Angular Material 适配包，提供 `AbstractMaterialComponent` 与默认 Prompt 能力实现。
 
-当前发布版本为 `1.0.0`。本包只负责 Angular Material 适配，通用请求、URL、存储和并发能力请从 `@richie696/angular-framework` 引入。
+当前发布版本为 `1.0.2`。本包只负责 Angular Material 适配，通用请求、URL、存储和并发能力请从 `@richie696/angular-framework` 引入。
 
 ## 安装
 

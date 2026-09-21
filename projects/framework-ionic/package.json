@@ -1,12 +1,12 @@
 {
   "name": "@richie696/angular-framework-ionic",
-  "version": "1.0.1",
+  "version": "1.0.2",
   "description": "Ionic adapter package for @richie696/angular-framework",
   "keywords": [
     "@richie696/angular-framework-ionic",
     "angular-framework",
     "ionic",
-    "rydeen"
+    "atlas-richie"
   ],
   "author": "richie696",
   "license": "MIT",

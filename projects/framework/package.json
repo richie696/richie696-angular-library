@@ -1,12 +1,12 @@
 {
   "name": "@richie696/angular-framework",
-  "version": "1.0.1",
-  "description": "Rydeen's Angular Framework",
+  "version": "1.0.2",
+  "description": "Atlas Richie's Angular Framework",
   "keywords": [
     "@richie696/angular-framework",
     "angular-framework",
     "angular",
-    "rydeen"
+    "atlas-richie"
   ],
   "author": "richie696",
   "license": "MIT",

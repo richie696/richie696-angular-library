@@ -161,7 +161,7 @@ export class LocalStorage {
    */
   private static isLocalStorageAvailable(): boolean {
     if (typeof localStorage === 'undefined') return false
-    const testKey = `__rydeen_storage_test_${Date.now()}`
+    const testKey = `__ar_storage_test_${Date.now()}`
     try {
       localStorage.setItem(testKey, testKey)
       localStorage.removeItem(testKey)

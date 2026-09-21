@@ -1,6 +1,6 @@
 {
   "name": "@richie696/angular",
-  "version": "1.0.1",
+  "version": "1.0.2",
   "private": true,
   "description": "Angular 22 foundation library monorepo with core services and optional UI adapters.",
   "author": "richie696",

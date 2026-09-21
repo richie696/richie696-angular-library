@@ -34,12 +34,12 @@ import { sha256Hex } from './crypto/hash';
 /**
  * 设备ID存储键名
  */
-const DEVICE_ID_STORAGE_KEY = 'rydeen_device_id';
+const DEVICE_ID_STORAGE_KEY = 'ar_device_id';
 
 /**
  * 设备ID存储键名（备用，用于SessionStorage）
  */
-const DEVICE_ID_SESSION_KEY = 'rydeen_device_id_session';
+const DEVICE_ID_SESSION_KEY = 'ar_device_id_session';
 
 /**
  * 获取或创建设备ID

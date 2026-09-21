@@ -126,7 +126,7 @@ export abstract class AbstractService {
     // 配置优先级：构造参数 > provider > 兼容的 Url.dynamicUrl > SSR-safe 全局运行时配置。
     const runtimeBaseUrl =
       typeof globalThis !== 'undefined'
-        ? String((globalThis as {__RYDEEN_BASE_URL__?: unknown}).__RYDEEN_BASE_URL__ ?? '')
+        ? String((globalThis as {__BASE_URL__?: unknown}).__BASE_URL__ ?? '')
         : ''
     const baseUrl = config.baseUrl ?? injectedConfig.baseUrl ?? (Url.dynamicUrl || runtimeBaseUrl)
     const mergedConfig = {...injectedConfig, ...config}
@@ -230,7 +230,7 @@ export abstract class AbstractService {
    * - 请求体：`FormData` 原样且不写死 `Content-Type`；普通对象在未传 `Content-Type` 时默认 `application/json`；
    *   `string` / `URLSearchParams` / `Blob` / `ArrayBuffer` / `Uint8Array` 原样作为 body。
    * - `Accept`：未在 `header` 中指定时默认 `text/event-stream`；可用 `options.accept` 覆盖。
-   * - `options.intent` 会写入 `X-Rydeen-Agent-Intent`（便于网关/日志）。
+   * - `options.intent` 会写入 `X-Agent-Intent`（便于网关/日志）。
    * - 每条 SSE `data:` 行默认 `JSON.parse`；可用 `options.parseSseData` 自定义。
    * - `kind === 'done'` → complete；`kind === 'error'` → error；否则仅 `next`。
    *
@@ -351,7 +351,7 @@ export abstract class AbstractService {
             header || {}
           )
           if (options?.intent != null && String(options.intent) !== '') {
-            requestHeaders['X-Rydeen-Agent-Intent'] = String(options.intent)
+            requestHeaders['X-Agent-Intent'] = String(options.intent)
           }
           if (!requestHeaders['Accept'] && !requestHeaders['accept']) {
             requestHeaders['Accept'] = 'text/event-stream'

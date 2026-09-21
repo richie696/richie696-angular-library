@@ -8,7 +8,6 @@
 
 [📚 Monorepo 文档](../../README.md) · [📦 包结构](../../README.md#包结构) · [💻 GitHub](https://github.com/richie696/richie696-angular-library) · [🐛 Issues](https://github.com/richie696/richie696-angular-library/issues) · [🤝 贡献](../../CONTRIBUTING.md) · [🛡️ 安全](../../SECURITY.md) · [📄 License](../../LICENSE)
 
-
 <!-- toc -->
 
 - [1. 安装](#1-%E5%AE%89%E8%A3%85)
@@ -52,7 +51,7 @@
 
 ------
 
-`@richie696/angular-framework` 是 Rydeen Angular 体系的核心基础包，提供：
+`@richie696/angular-framework` 是 Atlas Richie Angular 体系的核心基础包，提供：
 
 - 页面与提示抽象能力
 - 统一请求与流式请求能力（含加密、防重复提交）
@@ -61,7 +60,7 @@
 - 并发同步工具（锁、条件变量、栅栏等）
 - 事件与拦截器基础设施
 
-当前发布版本为 `1.0.0`。本包只提供 Angular 无 UI 绑定的 Core 能力，Ionic、Angular Material 和 PrimeNG 实现位于独立适配包。
+当前发布版本为 `1.0.2`。本包只提供 Angular 无 UI 绑定的 Core 能力，Ionic、Angular Material 和 PrimeNG 实现位于独立适配包。
 
 > 说明：UI 具体实现（Ionic / Material / PrimeNG）已拆分到独立适配包，core 仅保留抽象和通用能力。
 
